@@ -7,8 +7,9 @@ login via CLI, audit log to stderr, hardened container, generic error
 envelope. No update / delete / assign-a-terceros / create-plan /
 create-bucket surface.
 
-This is the **skeleton** PR. Only `/healthz` is implemented here. The
-Fase 1 surface lands across PRs 2-5; OpenClaw wiring lands in PR 6.
+This is PR 1 of the chained Fase 1 rollout. Only `/healthz` is implemented
+here; the Fase 1 surface lands across PRs 2-5 and OpenClaw wiring lands in
+PR 6.
 
 ## Quick Path (placeholder — finalized in PR 5)
 
@@ -18,6 +19,18 @@ docker compose up -d planner-sidecar
 docker compose exec planner-sidecar \
   node -e "fetch('http://127.0.0.1:3000/healthz').then((r) => process.exit(r.ok ? 0 : 1))"
 ```
+
+## Login
+
+Use the device-code CLI to seed the per-profile MSAL cache:
+
+```bash
+node src/login.js default
+```
+
+The CLI opens the Microsoft device login flow, prints the verification URL
+and code, then stores the token cache at
+`./planner-state/profiles/<profile>/token-cache.json` with mode `0600`.
 
 ## Security Boundary (placeholder — finalized in PR 5)
 
