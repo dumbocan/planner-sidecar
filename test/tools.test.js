@@ -1,0 +1,234 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import { TOOL_NAMES, createPlannerTools, plannerCreateTaskSchema } from '../src/tools.js';
+
+function makeTools(overrides = {}) {
+  const profileStore = overrides.profileStore ?? {
+    async listProfiles() {
+      return ['default'];
+    },
+  };
+  const auth = overrides.auth ?? {
+    async getStatus() {
+      return { connected: true, expiresAt: '2030-01-01T00:00:00.000Z' };
+    },
+  };
+  const graph = overrides.graph ?? {
+    async listPlans() {
+      return [];
+    },
+    async listBuckets() {
+      return [];
+    },
+    async listTasks() {
+      return [];
+    },
+    async getTask() {
+      return null;
+    },
+    async createTask() {
+      return { id: 'task-1', title: 'Task', bucketId: 'bucket-1' };
+    },
+  };
+
+  return { tools: createPlannerTools({ auth, graph, profileStore }), profileStore, auth, graph };
+}
+
+test('TOOL_NAMES exports exactly seven Fase 1 names and no forbidden growth names', () => {
+  assert.equal(TOOL_NAMES.length, 7);
+  assert.deepEqual(TOOL_NAMES, [
+    'planner_list_profiles',
+    'planner_status',
+    'planner_list_plans',
+    'planner_list_buckets',
+    'planner_list_tasks',
+    'planner_get_task',
+    'planner_create_task',
+  ]);
+  for (const forbidden of ['update_task', 'delete_task', 'create_plan', 'create_bucket']) {
+    assert.equal(TOOL_NAMES.includes(`planner_${forbidden}`), false);
+  }
+});
+
+test('planner_create_task schema does not expose assignee_email', () => {
+  assert.equal(Object.hasOwn(plannerCreateTaskSchema.shape, 'assignee_email'), false);
+});
+
+test('planner_list_profiles returns loaded profiles and ignores the profile arg', async () => {
+  const calls = [];
+  const { tools, profileStore } = makeTools({
+    profileStore: {
+      async listProfiles() {
+        calls.push('listProfiles');
+        return ['default', 'work'];
+      },
+    },
+  });
+
+  const result = await tools.listProfiles({ profile: 'secretaria' });
+
+  assert.deepEqual(result, { profiles: ['default', 'work'] });
+  assert.deepEqual(calls, ['listProfiles']);
+});
+
+test('planner_status reports connection state without touching Graph', async () => {
+  const graphCalls = [];
+  const { tools } = makeTools({
+    graph: {
+      ...makeTools().graph,
+      async listPlans() { graphCalls.push('listPlans'); return []; },
+    },
+    auth: {
+      async getStatus() {
+        return { connected: true, expiresAt: '2030-01-01T00:00:00.000Z' };
+      },
+    },
+  });
+
+  const result = await tools.status({ profile: 'secretaria' });
+
+  assert.deepEqual(result, { connected: true, expiresAt: '2030-01-01T00:00:00.000Z' });
+  assert.deepEqual(graphCalls, []);
+});
+
+test('planner_list_plans returns sanitized rows and ignores the profile arg', async () => {
+  const calls = [];
+  const { tools } = makeTools({
+    graph: {
+      async listPlans() {
+        calls.push('listPlans');
+        return [
+          { id: 'p1', title: 'Board', ownerGroupId: 'g1', description: 'secret', members: ['x'] },
+        ];
+      },
+      async listBuckets() { return []; },
+      async listTasks() { return []; },
+      async getTask() { return null; },
+      async createTask() { return { id: 'task-1', title: 'Task', bucketId: 'bucket-1' }; },
+    },
+  });
+
+  const result = await tools.listPlans({ profile: 'secretaria' });
+
+  assert.deepEqual(result, [{ id: 'p1', title: 'Board', ownerGroupId: 'g1' }]);
+  assert.deepEqual(calls, ['listPlans']);
+});
+
+test('planner_list_tasks filters by bucket and date inputs and strips description', async () => {
+  const calls = [];
+  const { tools } = makeTools({
+    graph: {
+      async listPlans() { return []; },
+      async listBuckets() { return []; },
+      async listTasks(planId, filters) {
+        calls.push({ planId, filters });
+        return filters.bucketId === '22222222-2222-4222-8222-222222222222' && filters.assignedToMe === true
+          ? [
+            { id: 't1', title: 'One', bucketId: '22222222-2222-4222-8222-222222222222', dueDateTime: '2026-08-01T00:00:00.000Z', assignments: { self: {} }, description: 'secret' },
+          ]
+          : [];
+      },
+      async getTask() { return null; },
+      async createTask() { return { id: 'task-1', title: 'Task', bucketId: 'bucket-1' }; },
+    },
+  });
+
+  const result = await tools.listTasks({
+    profile: 'secretaria',
+    plan_id: '11111111-1111-4111-8111-111111111111',
+    bucket_id: '22222222-2222-4222-8222-222222222222',
+    due_before: '2026-12-31',
+    due_after: '2026-01-01',
+    assigned_to_me: true,
+  });
+
+  assert.deepEqual(calls, [{
+    planId: '11111111-1111-4111-8111-111111111111',
+    filters: {
+      bucketId: '22222222-2222-4222-8222-222222222222',
+      dueBefore: '2026-12-31',
+      dueAfter: '2026-01-01',
+      assignedToMe: true,
+    },
+  }]);
+  assert.deepEqual(result, [
+    { id: 't1', title: 'One', bucketId: '22222222-2222-4222-8222-222222222222', dueDateTime: '2026-08-01T00:00:00.000Z', assignments: ['self'] },
+  ]);
+  assert.equal(Object.hasOwn(result[0], 'description'), false);
+});
+
+test('planner_get_task truncates description by default and returns full on opt-in', async () => {
+  const longDescription = 'x'.repeat(1200);
+  const { tools } = makeTools({
+    graph: {
+      async listPlans() { return []; },
+      async listBuckets() { return []; },
+      async listTasks() { return []; },
+      async getTask() {
+        return { id: 'task-1', title: 'Task', bucketId: 'bucket-1', description: longDescription, assignments: { self: {} } };
+      },
+      async createTask() { return { id: 'task-1', title: 'Task', bucketId: 'bucket-1' }; },
+    },
+  });
+
+  const short = await tools.getTask({ profile: 'secretaria', task_id: '33333333-3333-4333-8333-333333333333' });
+  const full = await tools.getTask({ profile: 'secretaria', task_id: '33333333-3333-4333-8333-333333333333', include_full_description: true });
+
+  assert.equal(short.description.length <= 500, true);
+  assert.equal(full.description.length, 1200);
+});
+
+test('planner_create_task self-assigns through Graph and rejects invalid input', async () => {
+  const calls = [];
+  const { tools } = makeTools({
+    graph: {
+      async listPlans() { return []; },
+      async listBuckets() { return []; },
+      async listTasks() { return []; },
+      async getTask() { return null; },
+      async createTask(payload) {
+        calls.push(payload);
+        return { id: 'task-99', title: payload.title, bucketId: payload.bucketId, dueDateTime: payload.dueDateTime };
+      },
+    },
+  });
+
+  const created = await tools.createTask({
+    profile: 'secretaria',
+    plan_id: '44444444-4444-4444-8444-444444444444',
+    bucket_id: '55555555-5555-4555-8555-555555555555',
+    title: 'New task',
+    due_date: '2026-08-01',
+  });
+
+  assert.deepEqual(calls, [{
+    planId: '44444444-4444-4444-8444-444444444444',
+    bucketId: '55555555-5555-4555-8555-555555555555',
+    title: 'New task',
+    dueDateTime: '2026-08-01T00:00:00.000Z',
+  }]);
+  assert.deepEqual(created, {
+    id: 'task-99',
+    title: 'New task',
+    bucketId: '55555555-5555-4555-8555-555555555555',
+    dueDateTime: '2026-08-01T00:00:00.000Z',
+  });
+
+  await assert.rejects(
+    tools.createTask({ profile: 'secretaria', plan_id: 'abc', bucket_id: '55555555-5555-4555-8555-555555555555', title: 'x' }),
+    /uuid/i,
+  );
+  await assert.rejects(
+    tools.createTask({ profile: 'secretaria', plan_id: '44444444-4444-4444-8444-444444444444', bucket_id: 'bad', title: 'x' }),
+    /uuid/i,
+  );
+  await assert.rejects(
+    tools.createTask({ profile: 'secretaria', plan_id: '44444444-4444-4444-8444-444444444444', bucket_id: '55555555-5555-4555-8555-555555555555', title: 'x'.repeat(257) }),
+    /256/i,
+  );
+  await assert.rejects(
+    tools.createTask({ profile: 'secretaria', plan_id: '44444444-4444-4444-8444-444444444444', bucket_id: '55555555-5555-4555-8555-555555555555', title: 'x', due_date: '2026/08/01' }),
+    /YYYY-MM-DD/i,
+  );
+});

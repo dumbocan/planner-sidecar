@@ -92,5 +92,60 @@ export function createGraphClient({
     getJson: (path, options) => request('GET', path, options),
     postJson: (path, body, options = {}) => request('POST', path, { ...options, body }),
     buildUrl: (path, options) => buildUrl(baseUrl, path, options),
+    async getMe() {
+      return await request('GET', '/me', { select: 'id' });
+    },
+    async listPlans() {
+      const response = await request('GET', '/me/planner/plans', { select: 'id,title,ownerGroupId' });
+      return Array.isArray(response?.value) ? response.value : [];
+    },
+    async listBuckets(planId) {
+      const response = await request('GET', `/planner/plans/${planId}/buckets`, {
+        select: 'id,name,orderHint',
+      });
+      return Array.isArray(response?.value) ? response.value : [];
+    },
+    async listTasks(planId, { bucketId, dueBefore, dueAfter, assignedToMe } = {}) {
+      const response = await request('GET', `/planner/plans/${planId}/tasks`, {
+        select: 'id,title,bucketId,dueDateTime,assignments',
+        top: 200,
+      });
+      const rows = Array.isArray(response?.value) ? response.value : [];
+      const meId = assignedToMe ? (await this.getMe())?.id : null;
+      return rows.filter((task) => {
+        if (bucketId && task.bucketId !== bucketId) return false;
+        if (dueBefore && typeof task.dueDateTime === 'string' && task.dueDateTime >= `${dueBefore}T23:59:59.999Z`) return false;
+        if (dueAfter && typeof task.dueDateTime === 'string' && task.dueDateTime < `${dueAfter}T00:00:00.000Z`) return false;
+        if (meId && assignedToMe) {
+          const assignments = task.assignments && typeof task.assignments === 'object' ? task.assignments : {};
+          if (!Object.hasOwn(assignments, meId)) return false;
+        }
+        return true;
+      });
+    },
+    async getTask(taskId) {
+      return await request('GET', `/planner/tasks/${taskId}`, {
+        select: 'id,title,bucketId,dueDateTime,assignments,description',
+      });
+    },
+    async createTask({ planId, bucketId, title, dueDateTime, selfAssignId }) {
+      const me = selfAssignId ?? (await this.getMe())?.id;
+      const body = {
+        planId,
+        bucketId,
+        title,
+        ...(dueDateTime ? { dueDateTime } : {}),
+        assignments: me
+          ? {
+            [me]: {
+              '@odata.type': 'microsoft.graph.plannerAssignment',
+              assignedDateTime: new Date().toISOString(),
+              orderHint: ' !',
+            },
+          }
+          : {},
+      };
+      return await request('POST', '/planner/tasks', { body });
+    },
   };
 }

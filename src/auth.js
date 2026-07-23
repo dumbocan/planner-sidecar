@@ -101,6 +101,18 @@ async function writeCacheFile(stateDir, profile, json) {
   await store.writeCache(profile, json);
 }
 
+function extractExpiresAt(cacheJson) {
+  if (!cacheJson || typeof cacheJson !== 'object') return null;
+  const accessToken = cacheJson.AccessToken;
+  if (!accessToken || typeof accessToken !== 'object') return null;
+  for (const entry of Object.values(accessToken)) {
+    if (!entry || typeof entry !== 'object') continue;
+    const expiresAt = entry.expiresOn ?? entry.expiresAt ?? entry.expires_on;
+    if (typeof expiresAt === 'string' && expiresAt) return expiresAt;
+  }
+  return null;
+}
+
 export function createFileCachePlugin({ stateDir, profile }) {
   if (typeof profile !== 'string') throw new AuthError('profile id is required');
   validateProfileId(profile);
@@ -184,7 +196,7 @@ export function createAuthClient({
     profile: state.profile,
     cachePlugin: built.cachePlugin,
 
-    async acquireToken({ scopes }) {
+    async acquireToken({ scopes, forceRefresh = false }) {
       if (!Array.isArray(scopes) || scopes.length === 0) {
         throw new AuthError('scopes must be a non-empty array');
       }
@@ -193,7 +205,7 @@ export function createAuthClient({
         throw new AuthRequiredError();
       }
       try {
-        const result = await built.app.acquireTokenSilent({ account: accounts[0], scopes });
+        const result = await built.app.acquireTokenSilent({ account: accounts[0], scopes, forceRefresh: Boolean(forceRefresh) });
         return normalizeAccessToken(result);
       } catch (error) {
         if (isInteractionRequiredFault(error)) {
@@ -279,6 +291,24 @@ export function createAuthClient({
 
     async getAllAccounts() {
       return await built.app.getAllAccounts();
+    },
+
+    async getStatus() {
+      const json = await loadCacheFileOrNull(stateDir, profile);
+      if (!json) {
+        return { connected: false, expiresAt: null };
+      }
+      let parsed = null;
+      try {
+        parsed = JSON.parse(json);
+      } catch {
+        throw new AuthError('invalid token cache JSON');
+      }
+      const expiresAt = extractExpiresAt(parsed);
+      return {
+        connected: true,
+        expiresAt,
+      };
     },
 
     async close() {
