@@ -14,6 +14,15 @@ const DEFAULT_PROFILE = 'default';
 const DEFAULT_SCOPES = ['Tasks.ReadWrite', 'Group.Read.All'];
 const GENERIC_ERROR_TEXT = 'Planner sidecar is unavailable.';
 
+const GRAPH_ERROR_MESSAGES = {
+  400: 'Bad request to Microsoft Graph. Verify field values and identifiers.',
+  401: 'Planner authentication has expired or is invalid. Try re-authenticating.',
+  403: 'Access denied by Microsoft Graph. The account may lack the required permissions.',
+  404: 'The requested Planner item was not found. It may have been deleted or the identifier is incorrect.',
+  409: 'Conflict detected. The item may have been modified by another session.',
+  429: 'Rate limited by Microsoft Graph. Try again later.',
+};
+
 const sessions = new Map();
 
 function toolResult(value) {
@@ -29,7 +38,10 @@ function resultCount(value) {
 export function plannerFailure(toolName, error) {
   const errorName = error?.constructor?.name ?? (typeof error === 'object' ? 'Error' : typeof error);
   console.error(JSON.stringify({ event: 'planner_tool_failure', tool: toolName, error: errorName }));
-  return { content: [{ type: 'text', text: GENERIC_ERROR_TEXT }], isError: true };
+  const message = error?.constructor?.name === 'GraphError'
+    ? (GRAPH_ERROR_MESSAGES[error.status] ?? `Microsoft Graph API returned status ${error.status}.`)
+    : GENERIC_ERROR_TEXT;
+  return { content: [{ type: 'text', text: message }], isError: true };
 }
 
 export function plannerSuccess(toolName, profile, value, startedAt) {

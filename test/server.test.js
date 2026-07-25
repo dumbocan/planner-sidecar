@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { listen, plannerFailure } from "../src/server.js";
+import { listen, plannerFailure, plannerSuccess } from "../src/server.js";
 
 test("GET /healthz returns 200 ok on a random port", async () => {
   const handle = await listen(0);
@@ -43,7 +43,7 @@ test("non-POST/GET/DELETE methods on /mcp return 405", async () => {
   }
 });
 
-test("plannerFailure returns the generic envelope and logs the constructor name only", () => {
+test("plannerFailure returns the generic envelope for non-GraphError and logs constructor name only", () => {
   const logs = [];
   const original = console.error;
   console.error = (line) => logs.push(line);
@@ -58,6 +58,79 @@ test("plannerFailure returns the generic envelope and logs the constructor name 
       error: "Error",
     });
     assert.equal(logs.join("\n").includes("secret message"), false);
+  } finally {
+    console.error = original;
+  }
+});
+
+test("plannerFailure returns specific message for GraphError 404", () => {
+  class GraphError extends Error {
+    constructor(message, { status }) { super(message); this.name = "GraphError"; this.status = status; }
+  }
+  const logs = [];
+  const original = console.error;
+  console.error = (line) => logs.push(line);
+  try {
+    const response = plannerFailure("planner_get_task", new GraphError("not found", { status: 404 }));
+    assert.equal(response.isError, true);
+    assert.equal(
+      response.content[0].text,
+      "The requested Planner item was not found. It may have been deleted or the identifier is incorrect.",
+    );
+  } finally {
+    console.error = original;
+  }
+});
+
+test("plannerFailure returns specific message for GraphError 401", () => {
+  class GraphError extends Error {
+    constructor(message, { status }) { super(message); this.name = "GraphError"; this.status = status; }
+  }
+  const logs = [];
+  const original = console.error;
+  console.error = (line) => logs.push(line);
+  try {
+    const response = plannerFailure("planner_list_plans", new GraphError("unauthorized", { status: 401 }));
+    assert.equal(response.isError, true);
+    assert.match(response.content[0].text, /re-authenticating/);
+  } finally {
+    console.error = original;
+  }
+});
+
+test("plannerFailure returns specific message for GraphError 500", () => {
+  class GraphError extends Error {
+    constructor(message, { status }) { super(message); this.name = "GraphError"; this.status = status; }
+  }
+  const logs = [];
+  const original = console.error;
+  console.error = (line) => logs.push(line);
+  try {
+    const response = plannerFailure("planner_list_plans", new GraphError("server error", { status: 500 }));
+    assert.equal(response.isError, true);
+    assert.match(response.content[0].text, /status 500/);
+  } finally {
+    console.error = original;
+  }
+});
+
+test("plannerSuccess logs a single structured audit line with no content leakage", () => {
+  const logs = [];
+  const original = console.error;
+  console.error = (line) => logs.push(line);
+  try {
+    const response = plannerSuccess("planner_list_plans", "default", [{ id: "p1" }], 0);
+    assert.equal(response.isError, undefined);
+    assert.equal(JSON.parse(response.content[0].text)[0].id, "p1");
+    const parsed = JSON.parse(logs[0]);
+    assert.deepEqual(parsed, {
+      event: "planner_tool_call",
+      tool: "planner_list_plans",
+      profile: "default",
+      result_count: 1,
+      duration_ms: parsed.duration_ms,
+    });
+    assert.equal(logs.join("\n").includes("p1"), false);
   } finally {
     console.error = original;
   }
