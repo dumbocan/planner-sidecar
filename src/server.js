@@ -32,7 +32,7 @@ export function plannerFailure(toolName, error) {
   return { content: [{ type: 'text', text: GENERIC_ERROR_TEXT }], isError: true };
 }
 
-function plannerSuccess(toolName, profile, value, startedAt) {
+export function plannerSuccess(toolName, profile, value, startedAt) {
   console.error(JSON.stringify({
     event: 'planner_tool_call',
     tool: toolName,
@@ -125,7 +125,7 @@ export function createMcpServer(runtime = createRuntime()) {
   registerTool(
     server,
     'planner_list_plans',
-    'List Planner plans owned by the authenticated user.',
+    'List Planner plans owned by the authenticated user. Each plan has an opaque Microsoft Planner id string (must be passed verbatim to other planner tools).',
     toolSchemas.planner_list_plans,
     (input) => runtime.tools.listPlans(input),
     runtime.profile,
@@ -133,7 +133,7 @@ export function createMcpServer(runtime = createRuntime()) {
   registerTool(
     server,
     'planner_list_buckets',
-    'List Planner buckets for one plan.',
+    'List Planner buckets for one plan. plan_id is an opaque Microsoft Planner identifier string — pass it verbatim from planner_list_plans.',
     toolSchemas.planner_list_buckets,
     (input) => runtime.tools.listBuckets(input),
     runtime.profile,
@@ -141,7 +141,7 @@ export function createMcpServer(runtime = createRuntime()) {
   registerTool(
     server,
     'planner_list_tasks',
-    'List Planner tasks with strict date and assignee filtering.',
+    'List Planner tasks with strict date and assignee filtering. plan_id and bucket_id are opaque Microsoft Planner identifier strings — pass them verbatim from planner_list_plans / planner_list_buckets.',
     toolSchemas.planner_list_tasks,
     (input) => runtime.tools.listTasks(input),
     runtime.profile,
@@ -149,7 +149,7 @@ export function createMcpServer(runtime = createRuntime()) {
   registerTool(
     server,
     'planner_get_task',
-    'Get a single Planner task with truncated description by default.',
+    'Get a single Planner task with truncated description by default. task_id is an opaque Microsoft Planner identifier string — pass it verbatim from planner_list_tasks.',
     toolSchemas.planner_get_task,
     (input) => runtime.tools.getTask(input),
     runtime.profile,
@@ -157,9 +157,41 @@ export function createMcpServer(runtime = createRuntime()) {
   registerTool(
     server,
     'planner_create_task',
-    'Create a Planner task that self-assigns to the authenticated user.',
+    'Create a Planner task that self-assigns to the authenticated user. plan_id and bucket_id are opaque Microsoft Planner identifier strings — pass them verbatim from planner_list_plans / planner_list_buckets.',
     plannerCreateTaskSchema,
     (input) => runtime.tools.createTask(input),
+    runtime.profile,
+  );
+  registerTool(
+    server,
+    'planner_update_task',
+    'Update a Planner task: mark complete (percentComplete), change due date, move to another bucket, or rename. task_id is an opaque Microsoft Planner identifier string — pass it verbatim from planner_list_tasks.',
+    toolSchemas.planner_update_task,
+    (input) => runtime.tools.updateTask(input),
+    runtime.profile,
+  );
+  registerTool(
+    server,
+    'planner_delete_task',
+    'Delete a Planner task. Requires confirm: true. Ask the user before calling this. task_id is an opaque Microsoft Planner identifier string — pass it verbatim from planner_list_tasks.',
+    toolSchemas.planner_delete_task,
+    (input) => runtime.tools.deleteTask(input),
+    runtime.profile,
+  );
+  registerTool(
+    server,
+    'planner_create_plan',
+    'Create a new Planner plan. title is required. If group_id is omitted, auto-detects the owner group from the first existing plan. The created plan is initially empty (no buckets or tasks).',
+    toolSchemas.planner_create_plan,
+    (input) => runtime.tools.createPlan(input),
+    runtime.profile,
+  );
+  registerTool(
+    server,
+    'planner_create_bucket',
+    'Create a new bucket in an existing Planner plan. plan_id is an opaque Microsoft Planner identifier string — pass it verbatim from planner_list_plans.',
+    toolSchemas.planner_create_bucket,
+    (input) => runtime.tools.createBucket(input),
     runtime.profile,
   );
 
@@ -167,7 +199,17 @@ export function createMcpServer(runtime = createRuntime()) {
 }
 
 export function createApp(runtime = createRuntime()) {
-  const mcpServer = createMcpServer(runtime);
+  const toolRegistry = createMcpServer(runtime);
+  let currentTransport = null;
+
+  async function connectTransport(transport) {
+    if (currentTransport) {
+      try { await toolRegistry.close(); } catch {}
+      currentTransport = null;
+    }
+    currentTransport = transport;
+    await toolRegistry.connect(transport);
+  }
 
   return createServer(async (request, response) => {
     if (request.method === 'GET' && request.url === '/healthz') {
@@ -204,12 +246,13 @@ export function createApp(runtime = createRuntime()) {
         transport.onclose = () => {
           if (transport.sessionId) sessions.delete(transport.sessionId);
         };
-        await mcpServer.connect(transport);
+        await connectTransport(transport);
         return transport.handleRequest(request, response, body);
       }
 
       response.writeHead(sessionId ? 404 : 400).end();
-    } catch {
+    } catch (error) {
+      console.error(JSON.stringify({ event: 'mcp_handler_error', message: error?.message, code: error?.code, name: error?.constructor?.name }));
       response.writeHead(400).end();
     }
   });

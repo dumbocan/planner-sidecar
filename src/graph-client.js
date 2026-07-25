@@ -50,7 +50,7 @@ export function createGraphClient({
     throw new TypeError('fetchImpl must be a function');
   }
 
-  async function request(method, path, { body, select, top, query } = {}) {
+    async function request(method, path, { body, select, top, query, headers: extraHeaders } = {}) {
     let accessToken = await getAccessToken({ forceRefresh: false });
     let refreshed = false;
 
@@ -61,6 +61,7 @@ export function createGraphClient({
         headers: {
           authorization: `Bearer ${accessToken}`,
           ...(body ? { 'content-type': 'application/json' } : {}),
+          ...extraHeaders,
         },
         body: body ? JSON.stringify(body) : undefined,
       });
@@ -79,6 +80,8 @@ export function createGraphClient({
       if (shouldRetry(response.status) && attempt < 2) {
         continue;
       }
+      const errorText = response.status === 400 ? ` (body: ${(await response.clone().text().catch(() => '')).substring(0, 200)})` : '';
+      console.error(JSON.stringify({ event: 'graph_request_failed', method, url, status: response.status, text: errorText }));
       throw new GraphError(`Graph request failed with ${response.status}`, {
         status: response.status,
         url,
@@ -96,7 +99,7 @@ export function createGraphClient({
       return await request('GET', '/me', { select: 'id' });
     },
     async listPlans() {
-      const response = await request('GET', '/me/planner/plans', { select: 'id,title,ownerGroupId' });
+      const response = await request('GET', '/me/planner/plans', { select: 'id,title,owner' });
       return Array.isArray(response?.value) ? response.value : [];
     },
     async listBuckets(planId) {
@@ -107,7 +110,7 @@ export function createGraphClient({
     },
     async listTasks(planId, { bucketId, dueBefore, dueAfter, assignedToMe } = {}) {
       const response = await request('GET', `/planner/plans/${planId}/tasks`, {
-        select: 'id,title,bucketId,dueDateTime,assignments',
+        select: 'id,title,bucketId,dueDateTime,percentComplete,assignments',
         top: 200,
       });
       const rows = Array.isArray(response?.value) ? response.value : [];
@@ -125,7 +128,37 @@ export function createGraphClient({
     },
     async getTask(taskId) {
       return await request('GET', `/planner/tasks/${taskId}`, {
-        select: 'id,title,bucketId,dueDateTime,assignments,description',
+        select: 'id,title,bucketId,dueDateTime,percentComplete,assignments',
+      });
+    },
+    async getTaskWithEtag(taskId) {
+      return await request('GET', `/planner/tasks/${taskId}`, {
+        select: 'id,percentComplete',
+      });
+    },
+    async updateTask(taskId, { percentComplete, dueDateTime, bucketId, title }) {
+      const current = await this.getTaskWithEtag(taskId);
+      const etag = current?.['@odata.etag'];
+      if (!etag) throw new GraphError('Task not found or missing etag', { status: 404, url: `/planner/tasks/${taskId}`, method: 'PATCH' });
+
+      const body = {};
+      if (percentComplete !== undefined) body.percentComplete = percentComplete;
+      if (dueDateTime !== undefined) body.dueDateTime = dueDateTime;
+      if (bucketId !== undefined) body.bucketId = bucketId;
+      if (title !== undefined) body.title = title;
+
+      return await request('PATCH', `/planner/tasks/${taskId}`, {
+        body,
+        headers: { 'If-Match': etag },
+      });
+    },
+    async deleteTask(taskId) {
+      const current = await this.getTaskWithEtag(taskId);
+      const etag = current?.['@odata.etag'];
+      if (!etag) throw new GraphError('Task not found or missing etag', { status: 404, url: `/planner/tasks/${taskId}`, method: 'DELETE' });
+
+      return await request('DELETE', `/planner/tasks/${taskId}`, {
+        headers: { 'If-Match': etag },
       });
     },
     async createTask({ planId, bucketId, title, dueDateTime, selfAssignId }) {
@@ -137,15 +170,24 @@ export function createGraphClient({
         ...(dueDateTime ? { dueDateTime } : {}),
         assignments: me
           ? {
-            [me]: {
-              '@odata.type': 'microsoft.graph.plannerAssignment',
-              assignedDateTime: new Date().toISOString(),
-              orderHint: ' !',
-            },
+        [me]: {
+          '@odata.type': 'microsoft.graph.plannerAssignment',
+          orderHint: ' !',
+        },
           }
           : {},
       };
       return await request('POST', '/planner/tasks', { body });
+    },
+    async createPlan(title, ownerGroupId) {
+      return await request('POST', '/planner/plans', {
+        body: { owner: ownerGroupId, title },
+      });
+    },
+    async createBucket(planId, name) {
+      return await request('POST', '/planner/buckets', {
+        body: { planId, name },
+      });
     },
   };
 }
