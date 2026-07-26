@@ -186,7 +186,7 @@ export function createGraphClient({
     },
     async getBucketWithEtag(bucketId) {
       return await request('GET', `/planner/buckets/${bucketId}`, {
-        select: 'id,name',
+        select: 'id,name,planId',
       });
     },
     async updateBucket(bucketId, name) {

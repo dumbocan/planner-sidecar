@@ -300,6 +300,7 @@ test('planner_delete_bucket forwards the bucket_id to graph.deleteBucket', async
       async listTasks() { return []; },
       async getTask() { return null; },
       async createTask() { return { id: 'task-1', title: 'Task', bucketId: 'bucket-1' }; },
+      async getBucketWithEtag() { return { id: 'bucket-99', name: 'Test', planId: 'plan-1', '@odata.etag': '"etag-1"' }; },
       async deleteBucket(bucketId) {
         calls.push({ bucketId });
         return null;
@@ -315,4 +316,27 @@ test('planner_delete_bucket forwards the bucket_id to graph.deleteBucket', async
 
   assert.deepEqual(calls, [{ bucketId: 'bucket-99' }]);
   assert.deepEqual(result, { deleted: true, bucketId: 'bucket-99' });
+});
+
+test('planner_delete_bucket warns when bucket has tasks', async () => {
+  const { tools } = makeTools({
+    graph: {
+      async listPlans() { return []; },
+      async listBuckets() { return []; },
+      async listTasks() { return [{ id: 't-1', title: 'Task' }, { id: 't-2', title: 'Another' }]; },
+      async getTask() { return null; },
+      async createTask() { return { id: 'task-1', title: 'Task', bucketId: 'bucket-1' }; },
+      async getBucketWithEtag() { return { id: 'bucket-99', name: 'Test', planId: 'plan-1', '@odata.etag': '"etag-1"' }; },
+      async deleteBucket() { throw new Error('should not reach delete'); },
+    },
+  });
+
+  const result = await tools.deleteBucket({
+    profile: 'secretaria',
+    bucket_id: 'bucket-99',
+    confirm: true,
+  });
+
+  assert.equal(result.blocked, true);
+  assert.match(result.reason, /2 task/);
 });

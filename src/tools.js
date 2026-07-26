@@ -243,6 +243,20 @@ export function createPlannerTools({ auth, graph, profileStore }) {
     },
     async deleteBucket(input) {
       const parsed = parseArgs(plannerDeleteBucketSchema, input);
+
+      // Warn if the bucket still has tasks — deleting a Planner bucket deletes all tasks inside it.
+      const bucket = await graph.getBucketWithEtag(parsed.bucket_id);
+      const planId = bucket?.planId;
+      if (planId) {
+        const tasks = await graph.listTasks(planId, { bucketId: parsed.bucket_id });
+        if (tasks.length > 0) {
+          return {
+            blocked: true,
+            reason: `Bucket ${parsed.bucket_id} still has ${tasks.length} task(s). Deleting a Planner bucket permanently removes all its tasks. Move or delete the tasks first, or call deleteBucket again with confirm: true and a force: true flag.`,
+          };
+        }
+      }
+
       await graph.deleteBucket(parsed.bucket_id);
       return { deleted: true, bucketId: parsed.bucket_id };
     },

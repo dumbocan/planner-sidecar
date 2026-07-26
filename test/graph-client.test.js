@@ -80,7 +80,7 @@ test('getBucketWithEtag returns bucket with select fields', async () => {
     getAccessToken: async () => 'token-a',
     fetchImpl: async (url, init) => {
       calls.push({ url, method: init.method });
-      return makeResponse(200, JSON.stringify({ id: 'b-1', name: 'Hoy', '@odata.etag': '"etag-1"' }));
+      return makeResponse(200, JSON.stringify({ id: 'b-1', name: 'Hoy', planId: 'plan-1', '@odata.etag': '"etag-1"' }));
     },
   });
 
@@ -88,8 +88,8 @@ test('getBucketWithEtag returns bucket with select fields', async () => {
 
   assert.equal(calls.length, 1);
   assert.match(calls[0].url, /\/planner\/buckets\/b-1/);
-  assert.match(calls[0].url, /\$select=id,name/);
-  assert.deepEqual(result, { id: 'b-1', name: 'Hoy', '@odata.etag': '"etag-1"' });
+  assert.match(calls[0].url, /\$select=id,name,planId/);
+  assert.deepEqual(result, { id: 'b-1', name: 'Hoy', planId: 'plan-1', '@odata.etag': '"etag-1"' });
 });
 
 test('updateBucket sends PATCH with If-Match etag and name', async () => {
