@@ -155,7 +155,7 @@ export function createMcpServer(runtime = createRuntime()) {
   registerTool(
     server,
     'planner_delete_task',
-    'Delete a Planner task. Requires confirm: true. Ask the user before calling this. task_id is an opaque Microsoft Planner identifier string — pass it verbatim from planner_list_tasks.',
+    'Delete a Planner task. CRITICAL: You MUST ask the user for explicit yes/no confirmation before calling this. Do NOT assume confirm: true means you can skip asking — the user must know WHAT task is being deleted. task_id is an opaque Microsoft Planner identifier string — pass it verbatim from planner_list_tasks.',
     toolSchemas.planner_delete_task,
     (input) => runtime.tools.deleteTask(input),
     runtime.profile,
@@ -187,7 +187,7 @@ export function createMcpServer(runtime = createRuntime()) {
   registerTool(
     server,
     'planner_delete_bucket',
-    'Delete a Planner bucket and its tasks. Requires confirm: true. Ask the user before calling this. bucket_id is an opaque Microsoft Planner identifier string — pass it verbatim from planner_list_buckets.',
+    'Delete a Planner bucket and ALL its tasks. CRITICAL: You MUST ask the user for explicit yes/no confirmation before calling this. State the bucket name and how many tasks it contains (the tool checks this automatically). bucket_id is an opaque Microsoft Planner identifier string — pass it verbatim from planner_list_buckets.',
     toolSchemas.planner_delete_bucket,
     (input) => runtime.tools.deleteBucket(input),
     runtime.profile,
