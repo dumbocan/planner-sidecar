@@ -202,6 +202,17 @@ export function createPlannerTools({ auth, graph, profileStore }) {
     },
     async deleteTask(input) {
       const parsed = parseArgs(plannerDeleteTaskSchema, input);
+
+      // Warn if the task is not yet complete.
+      const task = await graph.getTask(parsed.task_id);
+      const pct = task?.percentComplete;
+      if (pct !== undefined && pct < 100) {
+        return {
+          blocked: true,
+          reason: `Task ${parsed.task_id} is only ${pct}% complete. Deleting it will lose progress. Mark it complete first or call deleteTask again with confirm: true if you still want to delete it.`,
+        };
+      }
+
       await graph.deleteTask(parsed.task_id);
       return { deleted: true, taskId: parsed.task_id };
     },

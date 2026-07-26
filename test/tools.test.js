@@ -30,6 +30,9 @@ function makeTools(overrides = {}) {
     async createTask() {
       return { id: 'task-1', title: 'Task', bucketId: 'bucket-1' };
     },
+    async deleteTask() {
+      return null;
+    },
   };
 
   return { tools: createPlannerTools({ auth, graph, profileStore }), profileStore, auth, graph };
@@ -339,4 +342,52 @@ test('planner_delete_bucket warns when bucket has tasks', async () => {
 
   assert.equal(result.blocked, true);
   assert.match(result.reason, /2 task/);
+});
+
+test('planner_delete_task warns when task is not complete', async () => {
+  const { tools } = makeTools({
+    graph: {
+      async listPlans() { return []; },
+      async listBuckets() { return []; },
+      async listTasks() { return []; },
+      async getTask() { return { id: 't-1', title: 'Test', percentComplete: 40 }; },
+      async createTask() { return { id: 'task-1', title: 'Task', bucketId: 'bucket-1' }; },
+      async deleteTask() { throw new Error('should not reach delete'); },
+    },
+  });
+
+  const result = await tools.deleteTask({
+    profile: 'secretaria',
+    task_id: 't-1',
+    confirm: true,
+  });
+
+  assert.equal(result.blocked, true);
+  assert.match(result.reason, /40%/);
+});
+
+test('planner_delete_task deletes when task is 100% complete', async () => {
+  const calls = [];
+  const { tools } = makeTools({
+    graph: {
+      async listPlans() { return []; },
+      async listBuckets() { return []; },
+      async listTasks() { return []; },
+      async getTask() { return { id: 't-1', title: 'Test', percentComplete: 100 }; },
+      async createTask() { return { id: 'task-1', title: 'Task', bucketId: 'bucket-1' }; },
+      async deleteTask(taskId) {
+        calls.push({ taskId });
+        return null;
+      },
+    },
+  });
+
+  const result = await tools.deleteTask({
+    profile: 'secretaria',
+    task_id: 't-1',
+    confirm: true,
+  });
+
+  assert.deepEqual(calls, [{ taskId: 't-1' }]);
+  assert.deepEqual(result, { deleted: true, taskId: 't-1' });
 });
