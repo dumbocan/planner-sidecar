@@ -1,6 +1,26 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
-import { listen, plannerFailure, plannerSuccess } from "../src/server.js";
+import { createRuntime, listen, plannerFailure, plannerSuccess } from "../src/server.js";
+
+test("createRuntime builds real auth and Graph clients without PLANNER_CLIENT_ID", async () => {
+  const originalClientId = process.env.PLANNER_CLIENT_ID;
+  const stateDir = await mkdtemp(path.join(tmpdir(), "planner-sidecar-server-"));
+  try {
+    delete process.env.PLANNER_CLIENT_ID;
+    const runtime = createRuntime({ stateDir });
+    assert.equal(typeof runtime.auth.acquireToken, "function");
+    assert.equal(typeof runtime.graph.getMe, "function");
+    assert.equal(typeof runtime.graph.listPlans, "function");
+    assert.deepEqual(await runtime.auth.getStatus(), { connected: false, expiresAt: null });
+  } finally {
+    if (originalClientId === undefined) delete process.env.PLANNER_CLIENT_ID;
+    else process.env.PLANNER_CLIENT_ID = originalClientId;
+    await rm(stateDir, { recursive: true, force: true });
+  }
+});
 
 test("GET /healthz returns 200 ok on a random port", async () => {
   const handle = await listen(0);
@@ -92,7 +112,7 @@ test("plannerFailure returns specific message for GraphError 401", () => {
   try {
     const response = plannerFailure("planner_list_plans", new GraphError("unauthorized", { status: 401 }));
     assert.equal(response.isError, true);
-    assert.match(response.content[0].text, /re-authenticating/);
+    assert.match(response.content[0].text, /planner-sidecar onboard/);
   } finally {
     console.error = original;
   }

@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import {
   AuthRequiredError,
@@ -20,7 +21,7 @@ export { AuthRequiredError, ConsentDeniedError, DeviceCodeExpiredError, NetworkE
 //
 // Exit codes (matches design §CLI login flow):
 //   0  success
-//   2  missing PLANNER_CLIENT_ID
+//   2  invalid CLI usage
 //   3  device-code expired
 //   4  user denied consent
 //   5  network error
@@ -70,8 +71,8 @@ export async function runLogin({
     client = createAuthClient({
       profile,
       stateDir: resolvedStateDir,
-      clientId: clientId ?? process.env.PLANNER_CLIENT_ID ?? null,
-      tenant: tenant ?? process.env.PLANNER_TENANT ?? 'common',
+      clientId,
+      tenant,
       PublicClientApplicationImpl,
     });
 
@@ -113,13 +114,8 @@ export async function runLogin({
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const { profile } = parseLoginArgs(process.argv);
-  const clientId = process.env.PLANNER_CLIENT_ID;
-  if (!clientId) {
-    console.error('PLANNER_CLIENT_ID is required in the sidecar environment');
-    process.exit(2);
-  }
-  const { exitCode } = await runLogin({ profile, clientId });
+  const { exitCode } = await runLogin({ profile });
   process.exit(exitCode);
 }

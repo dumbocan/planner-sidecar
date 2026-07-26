@@ -16,7 +16,7 @@ const GENERIC_ERROR_TEXT = 'Planner sidecar is unavailable.';
 
 const GRAPH_ERROR_MESSAGES = {
   400: 'Bad request to Microsoft Graph. Verify field values and identifiers.',
-  401: 'Planner authentication has expired or is invalid. Try re-authenticating.',
+  401: 'Planner authentication has expired or is invalid. Run `planner-sidecar onboard`.',
   403: 'Access denied by Microsoft Graph. The account may lack the required permissions.',
   404: 'The requested Planner item was not found. It may have been deleted or the identifier is incorrect.',
   409: 'Conflict detected. The item may have been modified by another session.',
@@ -55,50 +55,20 @@ export function plannerSuccess(toolName, profile, value, startedAt) {
   return toolResult(value);
 }
 
-function createRuntime({
+export function createRuntime({
   stateDir = process.env.PLANNER_STATE_DIR ?? './planner-state',
   profile = DEFAULT_PROFILE,
   clientId = process.env.PLANNER_CLIENT_ID,
   tenant = process.env.PLANNER_TENANT ?? 'common',
 } = {}) {
   const profileStore = createProfileStore({ stateDir });
-  const auth = clientId
-    ? createAuthClient({ profile, stateDir, clientId, tenant })
-    : {
-      async acquireToken() {
-        throw new Error('PLANNER_CLIENT_ID is required');
-      },
-      async getStatus() {
-        return { connected: false, expiresAt: null };
-      },
-    };
-  const graph = clientId
-    ? createGraphClient({
-      getAccessToken: async ({ forceRefresh } = {}) => {
-        const token = await auth.acquireToken({ scopes: DEFAULT_SCOPES, forceRefresh });
-        return token.accessToken;
-      },
-    })
-    : {
-      async getMe() {
-        throw new Error('PLANNER_CLIENT_ID is required');
-      },
-      async listPlans() {
-        throw new Error('PLANNER_CLIENT_ID is required');
-      },
-      async listBuckets() {
-        throw new Error('PLANNER_CLIENT_ID is required');
-      },
-      async listTasks() {
-        throw new Error('PLANNER_CLIENT_ID is required');
-      },
-      async getTask() {
-        throw new Error('PLANNER_CLIENT_ID is required');
-      },
-      async createTask() {
-        throw new Error('PLANNER_CLIENT_ID is required');
-      },
-    };
+  const auth = createAuthClient({ profile, stateDir, clientId, tenant });
+  const graph = createGraphClient({
+    getAccessToken: async ({ forceRefresh } = {}) => {
+      const token = await auth.acquireToken({ scopes: DEFAULT_SCOPES, forceRefresh });
+      return token.accessToken;
+    },
+  });
   const tools = createPlannerTools({ auth, graph, profileStore });
   return { auth, graph, profileStore, tools, profile };
 }

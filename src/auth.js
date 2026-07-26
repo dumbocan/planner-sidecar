@@ -4,6 +4,10 @@ import { PublicClientApplication } from '@azure/msal-node';
 
 import { createProfileStore, validateProfileId } from './profile-store.js';
 
+// Public multi-tenant App Registration owned by the Planner sidecar project.
+// Client IDs are not secrets; delegated consent and token caches remain tenant-local.
+export const BUILTIN_CLIENT_ID = 'c4fad54f-28a3-432d-92c8-f72a5f970a83';
+
 // planner-sidecar wraps MSAL PublicClientApplication, persists the token
 // cache via a custom ICachePlugin under
 // `<stateDir>/profiles/<id>/token-cache.json` with mode 0600, and exposes a
@@ -21,7 +25,7 @@ export class AuthError extends Error {
 }
 
 export class AuthRequiredError extends AuthError {
-  constructor(message = 'no cached account; run `node src/login.js <profile>`') {
+  constructor(message = 'no cached account; run `planner-sidecar onboard`') {
     super(message);
     this.name = 'AuthRequiredError';
   }
@@ -135,18 +139,7 @@ export function createFileCachePlugin({ stateDir, profile }) {
 
 function buildClient({ profile, stateDir, clientId, tenant, PublicClientApplicationImpl }) {
   const cachePlugin = createFileCachePlugin({ stateDir, profile });
-  if (PublicClientApplicationImpl) {
-    const app = new PublicClientApplicationImpl({
-      auth: {
-        clientId: clientId ?? 'test-client-id',
-        authority: `https://login.microsoftonline.com/${tenant ?? 'common'}`,
-      },
-      cache: { cachePlugin },
-    });
-    return { app, cachePlugin };
-  }
-  if (!clientId) throw new AuthError('clientId is required to construct MSAL PublicClientApplication');
-  const app = new PublicClientApplication({
+  const app = new (PublicClientApplicationImpl ?? PublicClientApplication)({
     auth: {
       clientId,
       authority: `https://login.microsoftonline.com/${tenant ?? 'common'}`,
@@ -176,10 +169,15 @@ export function createAuthClient({
 } = {}) {
   if (!profile || typeof profile !== 'string') throw new AuthError('profile is required');
 
+  const configuredClientId = typeof clientId === 'string' && clientId.trim()
+    ? clientId.trim()
+    : typeof process.env.PLANNER_CLIENT_ID === 'string' && process.env.PLANNER_CLIENT_ID.trim()
+      ? process.env.PLANNER_CLIENT_ID.trim()
+      : BUILTIN_CLIENT_ID;
   const state = {
     profile,
     stateDir: path.resolve(stateDir ?? './planner-state'),
-    clientId: clientId ?? process.env.PLANNER_CLIENT_ID ?? null,
+    clientId: configuredClientId,
     tenant: tenant ?? process.env.PLANNER_TENANT ?? 'common',
     PublicClientApplicationImpl: PublicClientApplicationImpl ?? null,
   };

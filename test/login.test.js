@@ -105,6 +105,40 @@ test('parseLoginArgs rejects malformed argv structures', () => {
   assert.throws(() => parseLoginArgs(['node', 'src/login.js', 42]), /profile id/i);
 });
 
+test('runLogin uses the built-in client ID when no client configuration is provided', async () => {
+  const originalClientId = process.env.PLANNER_CLIENT_ID;
+  const stateDir = await makeTempStateDir();
+  const { fakeApp } = makeFakeAppState({ authenticate: async () => ACCESS_TOKEN_RESULT });
+  let authOptions = null;
+
+  try {
+    delete process.env.PLANNER_CLIENT_ID;
+    const result = await runLogin({
+      profile: 'default',
+      stateDir,
+      PublicClientApplicationImpl: class {
+        constructor(options) {
+          authOptions = options.auth;
+          Object.assign(this, fakeApp);
+          this.cachePlugin = options.cache.cachePlugin;
+        }
+      },
+      stdout: () => {},
+      audit: () => {},
+    });
+
+    assert.equal(result.exitCode, 0);
+    assert.deepEqual(authOptions, {
+      clientId: 'c4fad54f-28a3-432d-92c8-f72a5f970a83',
+      authority: 'https://login.microsoftonline.com/common',
+    });
+  } finally {
+    if (originalClientId === undefined) delete process.env.PLANNER_CLIENT_ID;
+    else process.env.PLANNER_CLIENT_ID = originalClientId;
+    await rm(stateDir, { recursive: true, force: true });
+  }
+});
+
 test('runLogin writes the cache file with mode 0600 on the happy path', async () => {
   const stateDir = await makeTempStateDir();
   const { calls, fakeApp } = makeFakeAppState({ authenticate: async () => ACCESS_TOKEN_RESULT });

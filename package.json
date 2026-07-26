@@ -1,9 +1,17 @@
 {
   "name": "planner-sidecar",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
-  "description": "Read + self-create MCP sidecar for Microsoft Planner (Fase 1, narrow surface).",
+  "description": "MCP sidecar for Microsoft Planner with zero-config device-code onboarding.",
+  "bin": {
+    "planner-sidecar": "./src/cli.js"
+  },
+  "files": [
+    "src",
+    "README.md",
+    ".env.example"
+  ],
   "scripts": {
     "start": "node src/server.js",
     "login": "node src/login.js",

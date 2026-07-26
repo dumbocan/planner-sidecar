@@ -7,6 +7,7 @@ import test from 'node:test';
 import {
   AuthError,
   AuthRequiredError,
+  BUILTIN_CLIENT_ID,
   ConsentDeniedError,
   DeviceCodeExpiredError,
   NetworkError,
@@ -73,6 +74,74 @@ const DEVICE_CODE_RESPONSE = {
   interval: 5,
   message: 'To sign in, open https://microsoft.com/devicelogin and enter: USER-CODE',
 };
+
+test('createAuthClient resolves client ID and tenant defaults with documented precedence', () => {
+  const originalClientId = process.env.PLANNER_CLIENT_ID;
+  const originalTenant = process.env.PLANNER_TENANT;
+  const captured = [];
+  class CapturingApp {
+    constructor(options) {
+      captured.push(options.auth);
+    }
+  }
+
+  try {
+    delete process.env.PLANNER_CLIENT_ID;
+    delete process.env.PLANNER_TENANT;
+    createAuthClient({
+      profile: 'default',
+      stateDir: '/tmp/example',
+      PublicClientApplicationImpl: CapturingApp,
+    });
+
+    process.env.PLANNER_CLIENT_ID = 'env-client';
+    process.env.PLANNER_TENANT = 'env-tenant';
+    createAuthClient({
+      profile: 'default',
+      stateDir: '/tmp/example',
+      PublicClientApplicationImpl: CapturingApp,
+    });
+    createAuthClient({
+      profile: 'default',
+      stateDir: '/tmp/example',
+      clientId: 'argument-client',
+      tenant: 'argument-tenant',
+      PublicClientApplicationImpl: CapturingApp,
+    });
+
+    process.env.PLANNER_CLIENT_ID = '   ';
+    createAuthClient({
+      profile: 'default',
+      stateDir: '/tmp/example',
+      PublicClientApplicationImpl: CapturingApp,
+    });
+
+    assert.deepEqual(captured, [
+      {
+        clientId: BUILTIN_CLIENT_ID,
+        authority: 'https://login.microsoftonline.com/common',
+      },
+      {
+        clientId: 'env-client',
+        authority: 'https://login.microsoftonline.com/env-tenant',
+      },
+      {
+        clientId: 'argument-client',
+        authority: 'https://login.microsoftonline.com/argument-tenant',
+      },
+      {
+        clientId: BUILTIN_CLIENT_ID,
+        authority: 'https://login.microsoftonline.com/env-tenant',
+      },
+    ]);
+    assert.equal(BUILTIN_CLIENT_ID, 'c4fad54f-28a3-432d-92c8-f72a5f970a83');
+  } finally {
+    if (originalClientId === undefined) delete process.env.PLANNER_CLIENT_ID;
+    else process.env.PLANNER_CLIENT_ID = originalClientId;
+    if (originalTenant === undefined) delete process.env.PLANNER_TENANT;
+    else process.env.PLANNER_TENANT = originalTenant;
+  }
+});
 
 test('createAuthClient returns a client with the documented surface', () => {
   const client = createAuthClient({ profile: 'default', stateDir: '/tmp/example', clientId: 'cid' });
@@ -374,6 +443,10 @@ test('package-level requestDeviceCode is a thin wrapper over client.requestDevic
   assert.equal(result.userCode, 'USER-CODE');
   assert.equal(result.verificationUri, 'https://microsoft.com/devicelogin');
   await rm(stateDir, { recursive: true, force: true });
+});
+
+test('AuthRequiredError directs users to the packaged onboarding command', () => {
+  assert.match(new AuthRequiredError().message, /planner-sidecar onboard/);
 });
 
 test('every error path produces a typed error whose constructor name is the audit signal', () => {
