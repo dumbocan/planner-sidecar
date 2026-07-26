@@ -74,6 +74,97 @@ test('5xx responses retry twice before succeeding', async () => {
   assert.equal(calls.length, 3);
 });
 
+test('getBucketWithEtag returns bucket with select fields', async () => {
+  const calls = [];
+  const client = createGraphClient({
+    getAccessToken: async () => 'token-a',
+    fetchImpl: async (url, init) => {
+      calls.push({ url, method: init.method });
+      return makeResponse(200, JSON.stringify({ id: 'b-1', name: 'Hoy', '@odata.etag': '"etag-1"' }));
+    },
+  });
+
+  const result = await client.getBucketWithEtag('b-1');
+
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].url, /\/planner\/buckets\/b-1/);
+  assert.match(calls[0].url, /\$select=id,name/);
+  assert.deepEqual(result, { id: 'b-1', name: 'Hoy', '@odata.etag': '"etag-1"' });
+});
+
+test('updateBucket sends PATCH with If-Match etag and name', async () => {
+  const calls = [];
+  let getCount = 0;
+  const client = createGraphClient({
+    getAccessToken: async () => 'token-a',
+    fetchImpl: async (url, init) => {
+      calls.push({ url, method: init.method, body: init.body, headers: init.headers });
+      if (!getCount) {
+        getCount += 1;
+        return makeResponse(200, JSON.stringify({ id: 'b-1', name: 'Hoy', '@odata.etag': '"etag-1"' }));
+      }
+      return makeResponse(204);
+    },
+  });
+
+  const result = await client.updateBucket('b-1', 'Nuevo');
+
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].method, 'GET');
+  assert.equal(calls[1].method, 'PATCH');
+  assert.match(calls[1].url, /\/planner\/buckets\/b-1/);
+  assert.equal(calls[1].headers['If-Match'], '"etag-1"');
+  assert.equal(JSON.parse(calls[1].body).name, 'Nuevo');
+  assert.equal(result, null); // 204 → null
+});
+
+test('updateBucket throws GraphError when bucket has no etag', async () => {
+  const client = createGraphClient({
+    getAccessToken: async () => 'token-a',
+    fetchImpl: async () => makeResponse(200, JSON.stringify({ id: 'b-1', name: 'Hoy' })),
+  });
+
+  await assert.rejects(
+    client.updateBucket('b-1', 'Nuevo'),
+    (error) => error instanceof GraphError && error.status === 404,
+  );
+});
+
+test('deleteBucket sends DELETE with If-Match etag', async () => {
+  const calls = [];
+  const client = createGraphClient({
+    getAccessToken: async () => 'token-a',
+    fetchImpl: async (url, init) => {
+      calls.push({ url, method: init.method, headers: init.headers });
+      if (calls.length === 1) {
+        return makeResponse(200, JSON.stringify({ id: 'b-1', name: 'Hoy', '@odata.etag': '"etag-2"' }));
+      }
+      return makeResponse(204);
+    },
+  });
+
+  const result = await client.deleteBucket('b-1');
+
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].method, 'GET');
+  assert.equal(calls[1].method, 'DELETE');
+  assert.match(calls[1].url, /\/planner\/buckets\/b-1/);
+  assert.equal(calls[1].headers['If-Match'], '"etag-2"');
+  assert.equal(result, null);
+});
+
+test('deleteBucket throws GraphError when bucket has no etag', async () => {
+  const client = createGraphClient({
+    getAccessToken: async () => 'token-a',
+    fetchImpl: async () => makeResponse(200, JSON.stringify({ id: 'b-1', name: 'Hoy' })),
+  });
+
+  await assert.rejects(
+    client.deleteBucket('b-1'),
+    (error) => error instanceof GraphError && error.status === 404,
+  );
+});
+
 test('4xx GraphError keeps body text out of the message', async () => {
   const client = createGraphClient({
     getAccessToken: async () => 'token-a',

@@ -35,8 +35,21 @@ function makeTools(overrides = {}) {
   return { tools: createPlannerTools({ auth, graph, profileStore }), profileStore, auth, graph };
 }
 
-test('TOOL_NAMES exports exactly seven Fase 1 names and no forbidden growth names', () => {
-  assert.equal(TOOL_NAMES.length, 7);
+function makeToolsWithBucketOps(overrides = {}) {
+  const base = makeTools(overrides);
+  return {
+    ...base,
+    graph: {
+      ...base.graph,
+      async getBucketWithEtag() { return null; },
+      async updateBucket() { return null; },
+      async deleteBucket() { return null; },
+    },
+  };
+}
+
+test('TOOL_NAMES exports all thirteen tool names', () => {
+  assert.equal(TOOL_NAMES.length, 13);
   assert.deepEqual(TOOL_NAMES, [
     'planner_list_profiles',
     'planner_status',
@@ -45,10 +58,13 @@ test('TOOL_NAMES exports exactly seven Fase 1 names and no forbidden growth name
     'planner_list_tasks',
     'planner_get_task',
     'planner_create_task',
+    'planner_update_task',
+    'planner_delete_task',
+    'planner_create_plan',
+    'planner_create_bucket',
+    'planner_update_bucket',
+    'planner_delete_bucket',
   ]);
-  for (const forbidden of ['update_task', 'delete_task', 'create_plan', 'create_bucket']) {
-    assert.equal(TOOL_NAMES.includes(`planner_${forbidden}`), false);
-  }
 });
 
 test('planner_create_task schema does not expose assignee_email', () => {
@@ -231,4 +247,72 @@ test('planner_create_task self-assigns through Graph and rejects invalid input',
     tools.createTask({ profile: 'secretaria', plan_id: '44444444-4444-4444-8444-444444444444', bucket_id: '55555555-5555-4555-8555-555555555555', title: 'x', due_date: '2026/08/01' }),
     /YYYY-MM-DD/i,
   );
+});
+
+test('planner_update_bucket forwards the bucket_id and name to graph.updateBucket', async () => {
+  const calls = [];
+  const { tools } = makeTools({
+    graph: {
+      async listPlans() { return []; },
+      async listBuckets() { return []; },
+      async listTasks() { return []; },
+      async getTask() { return null; },
+      async createTask() { return { id: 'task-1', title: 'Task', bucketId: 'bucket-1' }; },
+      async updateBucket(bucketId, name) {
+        calls.push({ bucketId, name });
+        return null;
+      },
+    },
+  });
+
+  const result = await tools.updateBucket({
+    profile: 'secretaria',
+    bucket_id: 'bucket-99',
+    name: 'Nuevo nombre',
+  });
+
+  assert.deepEqual(calls, [{ bucketId: 'bucket-99', name: 'Nuevo nombre' }]);
+  assert.deepEqual(result, { updated: true, bucketId: 'bucket-99', name: 'Nuevo nombre' });
+});
+
+test('planner_update_bucket rejects empty name', async () => {
+  const { tools } = makeTools({});
+  await assert.rejects(
+    tools.updateBucket({ profile: 'secretaria', bucket_id: 'bucket-99', name: '' }),
+    /min/i,
+  );
+});
+
+test('planner_delete_bucket requires confirm: true', async () => {
+  const { tools } = makeTools({});
+  await assert.rejects(
+    tools.deleteBucket({ profile: 'secretaria', bucket_id: 'bucket-99' }),
+    /expected true/i,
+  );
+});
+
+test('planner_delete_bucket forwards the bucket_id to graph.deleteBucket', async () => {
+  const calls = [];
+  const { tools } = makeTools({
+    graph: {
+      async listPlans() { return []; },
+      async listBuckets() { return []; },
+      async listTasks() { return []; },
+      async getTask() { return null; },
+      async createTask() { return { id: 'task-1', title: 'Task', bucketId: 'bucket-1' }; },
+      async deleteBucket(bucketId) {
+        calls.push({ bucketId });
+        return null;
+      },
+    },
+  });
+
+  const result = await tools.deleteBucket({
+    profile: 'secretaria',
+    bucket_id: 'bucket-99',
+    confirm: true,
+  });
+
+  assert.deepEqual(calls, [{ bucketId: 'bucket-99' }]);
+  assert.deepEqual(result, { deleted: true, bucketId: 'bucket-99' });
 });

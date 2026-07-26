@@ -184,6 +184,28 @@ export function createGraphClient({
         body: { owner: ownerGroupId, title },
       });
     },
+    async getBucketWithEtag(bucketId) {
+      return await request('GET', `/planner/buckets/${bucketId}`, {
+        select: 'id,name',
+      });
+    },
+    async updateBucket(bucketId, name) {
+      const current = await this.getBucketWithEtag(bucketId);
+      const etag = current?.['@odata.etag'];
+      if (!etag) throw new GraphError('Bucket not found or missing etag', { status: 404, url: `/planner/buckets/${bucketId}`, method: 'PATCH' });
+      return await request('PATCH', `/planner/buckets/${bucketId}`, {
+        body: { name },
+        headers: { 'If-Match': etag },
+      });
+    },
+    async deleteBucket(bucketId) {
+      const current = await this.getBucketWithEtag(bucketId);
+      const etag = current?.['@odata.etag'];
+      if (!etag) throw new GraphError('Bucket not found or missing etag', { status: 404, url: `/planner/buckets/${bucketId}`, method: 'DELETE' });
+      return await request('DELETE', `/planner/buckets/${bucketId}`, {
+        headers: { 'If-Match': etag },
+      });
+    },
     async createBucket(planId, name) {
       return await request('POST', '/planner/buckets', {
         body: { planId, name },

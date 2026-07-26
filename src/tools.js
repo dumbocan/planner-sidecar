@@ -16,6 +16,8 @@ export const TOOL_NAMES = [
   'planner_delete_task',
   'planner_create_plan',
   'planner_create_bucket',
+  'planner_update_bucket',
+  'planner_delete_bucket',
 ];
 
 const profileArgSchema = z.object({ profile: z.string().optional() }).passthrough();
@@ -69,6 +71,18 @@ const plannerCreatePlanSchema = profileArgSchema.extend({
 const plannerCreateBucketSchema = profileArgSchema.extend({
   plan_id: plannerId(),
   name: z.string().min(1).max(128),
+}).strict();
+
+const plannerUpdateBucketSchema = profileArgSchema.extend({
+  bucket_id: plannerId(),
+  name: z.string().min(1).max(128),
+}).strict();
+
+const plannerDeleteBucketSchema = profileArgSchema.extend({
+  bucket_id: plannerId(),
+  confirm: z.literal(true, {
+    errorMap: () => ({ message: 'confirm must be true to delete a bucket' }),
+  }),
 }).strict();
 
 const plannerStatusSchema = profileArgSchema.strict();
@@ -222,6 +236,16 @@ export function createPlannerTools({ auth, graph, profileStore }) {
       const row = await graph.createBucket(parsed.plan_id, parsed.name);
       return normalizeBucketRow(row);
     },
+    async updateBucket(input) {
+      const parsed = parseArgs(plannerUpdateBucketSchema, input);
+      await graph.updateBucket(parsed.bucket_id, parsed.name);
+      return { updated: true, bucketId: parsed.bucket_id, name: parsed.name };
+    },
+    async deleteBucket(input) {
+      const parsed = parseArgs(plannerDeleteBucketSchema, input);
+      await graph.deleteBucket(parsed.bucket_id);
+      return { deleted: true, bucketId: parsed.bucket_id };
+    },
   };
 }
 
@@ -237,4 +261,6 @@ export const toolSchemas = {
   planner_delete_task: plannerDeleteTaskSchema,
   planner_create_plan: plannerCreatePlanSchema,
   planner_create_bucket: plannerCreateBucketSchema,
+  planner_update_bucket: plannerUpdateBucketSchema,
+  planner_delete_bucket: plannerDeleteBucketSchema,
 };

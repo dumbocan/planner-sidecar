@@ -14,6 +14,8 @@ test("createRuntime builds real auth and Graph clients without PLANNER_CLIENT_ID
     assert.equal(typeof runtime.auth.acquireToken, "function");
     assert.equal(typeof runtime.graph.getMe, "function");
     assert.equal(typeof runtime.graph.listPlans, "function");
+    assert.equal(typeof runtime.graph.updateBucket, "function");
+    assert.equal(typeof runtime.graph.deleteBucket, "function");
     assert.deepEqual(await runtime.auth.getStatus(), { connected: false, expiresAt: null });
   } finally {
     if (originalClientId === undefined) delete process.env.PLANNER_CLIENT_ID;

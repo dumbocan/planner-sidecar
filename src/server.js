@@ -176,6 +176,22 @@ export function createMcpServer(runtime = createRuntime()) {
     (input) => runtime.tools.createBucket(input),
     runtime.profile,
   );
+  registerTool(
+    server,
+    'planner_update_bucket',
+    'Rename a Planner bucket. bucket_id is an opaque Microsoft Planner identifier string — pass it verbatim from planner_list_buckets.',
+    toolSchemas.planner_update_bucket,
+    (input) => runtime.tools.updateBucket(input),
+    runtime.profile,
+  );
+  registerTool(
+    server,
+    'planner_delete_bucket',
+    'Delete a Planner bucket and its tasks. Requires confirm: true. Ask the user before calling this. bucket_id is an opaque Microsoft Planner identifier string — pass it verbatim from planner_list_buckets.',
+    toolSchemas.planner_delete_bucket,
+    (input) => runtime.tools.deleteBucket(input),
+    runtime.profile,
+  );
 
   return server;
 }
