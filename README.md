@@ -1,30 +1,56 @@
-# planner-sidecar (Fase 1 + Fase 2)
+# planner-sidecar
 
-Read, self-create, update, and delete MCP sidecar for Microsoft Planner. Modeled on
-`services/laia-imap-sidecar/`. Ships nine tools:
+Read, self-create, update, and delete MCP sidecar for Microsoft Planner. Ships
+eleven tools across a Streamable HTTP MCP server. Works with any MCP client:
+OpenClaw, Claude Desktop, Hermes Agent, etc.
 
-- `planner_list_profiles`
-- `planner_status`
-- `planner_list_plans`
-- `planner_list_buckets`
-- `planner_list_tasks`
-- `planner_get_task`
-- `planner_create_task`
-- `planner_update_task`
-- `planner_delete_task`
+- `planner_list_profiles`, `planner_status`
+- `planner_list_plans`, `planner_list_buckets`, `planner_list_tasks`
+- `planner_get_task`, `planner_create_task`
+- `planner_update_task`, `planner_delete_task`
+- `planner_create_plan`, `planner_create_bucket`
 
 Login uses Microsoft device code. The token cache stays local at
 `./planner-state/profiles/<profile>/token-cache.json` with mode `0600`.
 
+## Installation
+
+```bash
+git clone https://github.com/openclaw/openclaw.git
+cd openclaw/services/planner-sidecar
+npm install
+```
+
+Docker image (for OpenClaw Gateway integration):
+
+```bash
+docker compose -f docker-compose2.yml build planner-sidecar
+```
+
 ## Quick start
+
+From source:
+
+```bash
+node src/cli.js onboard     # device code login (one-time)
+node src/cli.js serve        # starts MCP HTTP server on :3000
+```
+
+Docker (after building):
+
+```bash
+docker compose -f docker-compose2.yml up -d planner-sidecar
+```
+
+No Azure App Registration or auth environment variables are required. Open the
+verification URL, enter the displayed code, and approve delegated access.
+
+Quick start reference (for docs, demos, or if the package is published to npm):
 
 ```bash
 npx planner-sidecar onboard
 npx planner-sidecar serve
 ```
-
-No Azure App Registration or auth environment variables are required. Open the
-verification URL, enter the displayed code, and approve delegated access.
 
 ## Power user overrides
 
@@ -217,14 +243,12 @@ etag (`@odata.etag`) is obtained by doing a GET on the task first.
 - `planner_delete_task` tiene `confirm: literal(true)` en el schema para evitar borrados accidentales.
 - El agente DEBE preguntar a Javier antes de llamar `planner_delete_task`.
 
-## Non-Goals
+## Non-Goals (future work)
 
-- `planner_update_task`
-- `planner_delete_task`
-- `planner_create_plan`
-- `planner_create_bucket`
-- Real multi-profile selector in Fase 1
+- Multi-profile selector beyond `default`
 - Comments, attachments, checklists, external references
+- App-only tokens (device code only)
+- Assign to third parties (`assignee_email`)
 
 ## Troubleshooting
 
@@ -247,7 +271,7 @@ custom registration, verify `PLANNER_CLIENT_ID`; custom single-tenant apps must
 also set `PLANNER_TENANT` to their tenant ID. Then rerun:
 
 ```bash
-npx planner-sidecar onboard
+node src/cli.js onboard
 ```
 
 ### Token cache root-owned
@@ -279,7 +303,7 @@ El token cache tiene un `expiresAt` timestamp. Cuando expira, MSAL refresca
 automáticamente si hay refresh token. Si falla, run:
 
 ```bash
-npx planner-sidecar onboard
+node src/cli.js onboard
 ```
 
 y completar el device code flow.
