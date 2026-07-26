@@ -16,9 +16,8 @@ Login uses Microsoft device code. The token cache stays local at
 ## Installation
 
 ```bash
-git clone https://github.com/openclaw/openclaw.git
-cd openclaw/services/planner-sidecar
-npm install
+cd services/planner-sidecar
+pnpm install
 ```
 
 Docker image (for OpenClaw Gateway integration):
@@ -29,17 +28,9 @@ docker compose -f docker-compose2.yml build planner-sidecar
 
 ## Quick start
 
-From source:
-
 ```bash
 node src/cli.js onboard     # device code login (one-time)
 node src/cli.js serve        # starts MCP HTTP server on :3000
-```
-
-Docker (after building):
-
-```bash
-docker compose -f docker-compose2.yml up -d planner-sidecar
 ```
 
 No Azure App Registration or auth environment variables are required. Open the
