@@ -1,0 +1,74 @@
+{
+  "agents": {
+    "list": [
+      {
+        "id": "outlook-reader",
+        "name": "Outlook Reader",
+        "workspace": "/home/node/.openclaw/workspaces/outlook-reader",
+        "tools": {
+          "allow": [
+            "outlook-mail__outlook_list_folders",
+            "outlook-mail__outlook_list_messages",
+            "outlook-mail__outlook_search_messages",
+            "outlook-mail__outlook_get_sanitized_message"
+          ],
+          "deny": [
+            "group:web",
+            "browser",
+            "http",
+            "fetch",
+            "exec",
+            "shell",
+            "outlook-mail__outlook_send",
+            "outlook-mail__outlook_reply",
+            "outlook-mail__outlook_draft",
+            "outlook-mail__outlook_move",
+            "outlook-mail__outlook_delete",
+            "outlook-mail__outlook_flag",
+            "outlook-mail__outlook_attachment_download"
+          ]
+        }
+      }
+    ]
+  },
+  "channels": {
+    "telegram": {
+      "direct": {
+        "<outlook-reader-peer-id>": {
+          "tools": {
+            "allow": [
+              "outlook-mail__outlook_list_folders",
+              "outlook-mail__outlook_list_messages",
+              "outlook-mail__outlook_search_messages",
+              "outlook-mail__outlook_get_sanitized_message"
+            ],
+            "deny": [
+              "group:web",
+              "browser",
+              "http",
+              "fetch",
+              "exec",
+              "shell",
+              "outlook-mail__outlook_send",
+              "outlook-mail__outlook_reply",
+              "outlook-mail__outlook_draft",
+              "outlook-mail__outlook_move",
+              "outlook-mail__outlook_delete",
+              "outlook-mail__outlook_flag",
+              "outlook-mail__outlook_attachment_download"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "bindings": [
+    {
+      "agentId": "outlook-reader",
+      "match": {
+        "channel": "telegram",
+        "accountId": "outlook-reader"
+      }
+    }
+  ]
+}

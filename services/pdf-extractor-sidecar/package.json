@@ -1,0 +1,17 @@
+{
+  "name": "pdf-extractor-sidecar",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Internal text-only PDF extractor. No Outlook token, no host mounts, no external network. Returns sanitized text and a trust boundary for chat summarization.",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/**/*.test.js"
+  },
+  "dependencies": {
+    "pdfjs-dist": "4.10.38"
+  },
+  "devDependencies": {
+    "pdf-lib": "1.17.1"
+  }
+}
