@@ -32,7 +32,7 @@ const INVOICE_UNTRUSTED =
 // ticket date seen on Mercadona receipts. Both labels appear in some Mercadona
 // PDFs so we expose them as separate fields.
 const LABEL_INVOICE_DATE_RE =
-  /(?:^|\s)(?:fecha\s+factura|fecha\s+de\s+factura|fecha\s+facturaci[oó]n)\s*[:\-]?\s*/i;
+  /(?:^|\s)(?:fecha\s+factura|fecha\s+de\s+factura|fecha\s+facturaci[oó]n)(?!\s+simplificada)\s*[:\-]?\s*/i;
 const LABEL_SIMPLIFIED_DATE_RE =
   /(?:^|\s)(?:fecha\s+factura\s+simplificada|fecha\s+simplificada)\s*[:\-]?\s*/i;
 // Invoice-number labels always carry the "Nº" prefix in real Spanish invoices.
@@ -118,6 +118,32 @@ function normalizeDecimal(rawValue) {
   return `${intPart}.${match[3]}`;
 }
 
+function sliceDateValue(text, labelRe) {
+  if (typeof text !== "string") return null;
+  // Accepts dd/mm/yyyy, dd.mm.yyyy.
+  const dateRe = /(\d{1,2})[\/.](\d{1,2})[\/.](\d{2,4})/;
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const labelMatch = line.match(labelRe);
+    if (!labelMatch) continue;
+    // Try the rest of the same line first.
+    const after = line.slice(labelMatch.index + labelMatch[0].length);
+    let search = after;
+    // If same line is empty or has no date, try the next line.
+    if (!after.trim() || !dateRe.test(after)) {
+      if (i + 1 < lines.length) {
+        search = lines[i + 1];
+      }
+    }
+    const dateMatch = search.match(dateRe);
+    if (!dateMatch) continue;
+    if (!isValidDate(dateMatch[3], dateMatch[2], dateMatch[1])) continue;
+    return `${dateMatch[3].padStart(4, "0")}-${dateMatch[2].padStart(2, "0")}-${dateMatch[1].padStart(2, "0")}`;
+  }
+  return null;
+}
+
 function sliceLabel(text, labelRe, maxValueChars) {
   if (typeof text !== "string") return null;
   const lines = text.split(/\r?\n/);
@@ -184,12 +210,10 @@ export function extractInvoiceFields(text) {
   const input = typeof text === "string" ? text : "";
   const matched = [];
 
-  const invoiceDateRaw = sliceLabel(input, LABEL_INVOICE_DATE_RE, 16);
-  const invoiceDate = invoiceDateRaw ? normalizeDate(invoiceDateRaw) : null;
+  const invoiceDate = sliceDateValue(input, LABEL_INVOICE_DATE_RE);
   if (invoiceDate) matched.push("invoiceDate");
 
-  const simplifiedRaw = sliceLabel(input, LABEL_SIMPLIFIED_DATE_RE, 16);
-  const simplifiedInvoiceDate = simplifiedRaw ? normalizeDate(simplifiedRaw) : null;
+  const simplifiedInvoiceDate = sliceDateValue(input, LABEL_SIMPLIFIED_DATE_RE);
   if (simplifiedInvoiceDate) matched.push("simplifiedInvoiceDate");
 
   const invoiceNumber = sliceInvoiceNumber(input);

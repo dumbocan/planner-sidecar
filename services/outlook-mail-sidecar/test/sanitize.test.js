@@ -54,6 +54,18 @@ test("enforces per-message and tool payload bounds", () => {
   assert.ok(Buffer.byteLength(JSON.stringify(result)) < MAX_TOOL_PAYLOAD_BYTES);
 });
 
+test("sanitizeText does not redact date patterns as [PHONE]", () => {
+  const result = sanitizeText("Fecha Factura: 27/07/2026, next 28.07.2026", { maxChars: 200 });
+  assert.ok(!result.includes("[PHONE]"), `expected no [PHONE] in sanitized date text, got: ${result}`);
+  assert.match(result, /27\/07\/2026/);
+  assert.match(result, /28\.07\.2026/);
+});
+
+test("sanitizeText still redacts real phone numbers", () => {
+  const result = sanitizeText("Call +34 612 345 678 or 900 123 456", { maxChars: 200 });
+  assert.match(result, /\[PHONE\]/);
+});
+
 test("enforces total sanitized output cap including untrusted metadata such as receivedDateTime", () => {
   const hostileMetadata = "x".repeat(200_000);
   const result = sanitizeMessage({ receivedDateTime: hostileMetadata });

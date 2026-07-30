@@ -166,6 +166,34 @@ test("extractInvoiceFields accepts dotted thousands separators and normalizes th
   assert.equal(fields.totals.total, "12345.67");
 });
 
+test("sliceDateValue extracts date even when trailing text exists on the same line (PDF merge)", () => {
+  // Real Mercadona PDFs often have all text on one line when pdfjs merges items.
+  const text = [
+    "MERCADONA S.A. CIF A-12345678 Nº Factura: A-G2026-385710",
+    "Fecha Factura: 27/07/2026 Fecha factura simplificada: 27/07/2026 IVA 4%: 4.41 Total: 133,36 EUR",
+  ].join("\n");
+  const fields = extractInvoiceFields(text);
+  assert.equal(fields.invoiceDate, "2026-07-27");
+  assert.equal(fields.simplifiedInvoiceDate, "2026-07-27");
+  assert.equal(fields.invoiceNumber, "A-G2026-385710");
+  assert.equal(fields.totals.total, "133.36");
+  assert.ok(fields.matched.includes("invoiceDate"));
+  assert.ok(fields.matched.includes("simplifiedInvoiceDate"));
+});
+
+test("sliceDateValue finds date on the line after the label when PDF splits them", () => {
+  const text = [
+    "Nº Factura: A-G2026-385711",
+    "Fecha Factura:",
+    "27/07/2026",
+    "Total EUR 87,42",
+  ].join("\n");
+  const fields = extractInvoiceFields(text);
+  assert.equal(fields.invoiceDate, "2026-07-27");
+  // Date is on next line — new sliceDateValue spots it across lines
+  assert.ok(fields.matched.includes("invoiceDate"));
+});
+
 test("INVOICE_LABEL_HINT surfaces the labels it scans so the agent prompt can quote them", () => {
   assert.match(INVOICE_LABEL_HINT, /Fecha Factura/);
   assert.match(INVOICE_LABEL_HINT, /Fecha factura simplificada/);

@@ -36,7 +36,9 @@ export function sanitizeText(value, { maxChars = MAX_TEXT_CHARS } = {}) {
     .replace(/https?:\/\/[^\s<>'"]+/gi, "[URL]")
     .replace(/\b(?:www\.)[^\s<>'"]+/gi, "[URL]")
     .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[EMAIL]")
-    .replace(/(?<!\d)(?:\+?\d[\d .()/-]{7,}\d)(?!\d)/g, "[PHONE]");
+    .replace(/(?<!\d)(?:\+?\d[\d .()/-]{7,}\d)(?!\d)/g, (m) =>
+      /^\d{1,2}[\/.]\d{1,2}[\/.]\d{4}$/.test(m) ? m : "[PHONE]",
+    );
   text = decodeEntities(text).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "");
   return truncate(text.replace(/\s+/g, " "), maxChars);
 }
