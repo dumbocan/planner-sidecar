@@ -1,5 +1,12 @@
 # Next Session
 
+## Calendar + audio transcription both FIXED (2026-08-03) — closed
+
+- **Google-read calendar**: BOTH refresh tokens had been revoked by Google (`invalid_grant`) — re-authed laia (`token.json`) and personal (`gmail-dumbo-cata-token.json`) via PKCE loopback, sidecar recreated with `--force-recreate`, MCP verified for both accounts, cron `14babf87` runs clean (ok, delivered, 0 consecutive errors).
+- **Audio transcription**: local faster-whisper installed INSIDE the gateway container (venv + model at `state/local-tools/`, wrapper `services/transcribe.py`), config `tools.media.audio.models` switched from broken OpenAI entry (no key) to local CLI. Verified: wrapper exit 0, transcribes; Javier confirmed via Telegram that voice notes transcribe.
+- **Still open (product)**: whether the nightly summary should prioritize `personal` (dumbo.cata) or `laia` — Javier's events currently live in laia's calendar. The wording "Cuenta personal no disponible" may confuse if personal returns OK-empty.
+- **Worth knowing**: Google can revoke tokens again without warning; the MCP repro lives at `/tmp/opencode/mcp-repro.cjs` (POST initialize + tools/call to /mcp port 3000). If the gateway is ever `--force-recreate`d, the faster-whisper venv/model survive because they live under `state/local-tools/` (bind-mounted).
+
 ## Architectural decision pending (HIGH priority, 2026-07-26)
 
 Javier's vision: a "virtual secretary" agent (Laia) with its own workspace, isolated credentials, and a focused tool surface — to keep his personal Google accounts separate from the agent's actions ("if they hack her, they don't hack me").

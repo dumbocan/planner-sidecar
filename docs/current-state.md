@@ -1,5 +1,26 @@
 # Current State
 
+## 2026-08-03 - Audio transcription FIXED: local faster-whisper in gateway container
+
+- **Problem**: Voice notes in Telegram arrived as audio but produced no transcript. Laia's diagnosis (whisper-cli not installed, no internet, no pip) was WRONG — the gateway container has internet; the real issue was `tools.media.audio` pointing at `provider: "openai"` with `gpt-4o-transcribe` but NO OpenAI credential anywhere (doctor: `openai-whisper-api is allowed but unavailable: env: OPENAI_API_KEY`).
+- **Fix (option B — local, no API cost)**: Installed faster-whisper INSIDE the gateway container (its own system):
+  - `python3-pip` + venv at `/home/node/.openclaw/local-tools/whisper-venv`
+  - `faster-whisper 1.2.1` (PyAV/FFmpeg bundled — no system ffmpeg needed)
+  - Model `small` (464MB) cached at `/home/node/.openclaw/local-tools/hf-cache` (persistent, survives container recreate)
+  - Wrapper `services/transcribe.py` (copied to `state/local-tools/transcribe.py`) — prints plain transcript to stdout (OpenClaw CLI contract)
+  - `tools.media.audio.models` now: `{ type: "cli", command: ".../whisper-venv/bin/python", args: [".../transcribe.py", "{{MediaPath}}"], timeoutSeconds: 120 }`
+- **Persistence**: everything lives under `state/local-tools/` (bind-mounted rw from host) so `--force-recreate` of the gateway does NOT lose the venv or the 464MB model.
+- **Verified**: wrapper runs exit 0 and transcribes (tone test → "You"). Gateway restarted (restart, not recreate — venv survives). No audio/media errors in gateway logs. Javier confirmed via Telegram: transcription works.
+- **Gotchas**: Debian 12 PEP 668 → must use venv, NOT `--break-system-packages`. HF cache structure is `HF_HOME/hub/models--<org>--<model>` (not `HF_HOME/models--...`). Exec as root in container via `docker exec -u root` (no sudo inside). `state/local-tools` is runtime, NOT versioned (only `services/transcribe.py` + docs are committed).
+
+## 2026-08-03 - Google-read calendar fixed: BOTH tokens were revoked (laia + personal)
+
+- **Root cause of the "Google Calendar unavailable" nights (31/7, 1/8, 2/8)**: BOTH OAuth refresh tokens were revoked by Google (`invalid_grant: Token has been expired or revoked`). The 2/8 00:01 "fix" Laia reported only fixed the cron prompt (RFC3339 Atlantic/Canary, no `orderBy`, one retry) — the real MCP failure for `account=laia` remained until token re-auth.
+- **Fix**: Re-authenticated via PKCE loopback both slots: `token.json` (laia, 4/8 00:05) and `gmail-dumbo-cata-token.json` (personal, 4/8 00:17). Recreated the sidecar with `--force-recreate` (a plain `up -d` does NOT reload cached tokens — the OAuth client keeps the old refresh token in memory in `clientsPromise`).
+- **Verified**: MCP direct via `/mcp` (port 3000): laia returns real events, personal returns OK-empty. Cron `14babf87` ran clean twice: ok, delivered, 0 consecutive errors. Next run 2026-08-03 21:00 Atlantic/Canary. Gateway did NOT need restart (sidecar kept IP 172.19.0.2; Streamable HTTP re-initializes).
+- **Diagnosis gotchas**: MCP tool errors are swallowed by server.js's generic "Google read-only integration is unavailable."; `docker logs` empty (log file not readable). To diagnose: exec node directly in the container and test the refresh token via googleapis, or POST initialize + tools/call to /mcp (no curl/wget in the container).
+- **User note**: the nightly summary showed only laia's agenda because personal was failing; both are now healthy. Whether the summary should prioritize `personal` (dumbo.cata) vs `laia` depends on where Javier's events live (they currently appear in laia's calendar).
+
 ## 2026-07-29 - Session close: Mail security audit + tool count corrections
 
 - **Mail sidecar security audit complete** — 4 findings: (1) `authorize.js` personal slot requests `contacts` instead of `contacts.readonly`, (2) Telegram direct allows web_fetch/search/browser (prompt injection surface), (3) `openclaw.json` plaintext tokens (OpenClaw's own config, skip), (4) `outlook_list_attachments` registered in code but not in allowlist.
