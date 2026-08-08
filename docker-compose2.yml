@@ -258,10 +258,10 @@ services:
       - outlook-egress
       - pdf-mcp-internal
 
-  pdf-extractor-sidecar:
-    image: pdf-extractor-sidecar:local
+  pdf-tool-sidecar:
+    image: pdf-tool-sidecar:local
     build:
-      context: ./services/pdf-extractor-sidecar
+      context: ./services/pdf-tool-sidecar
     user: "1000:1000"
     read_only: true
     tmpfs:
@@ -272,16 +272,23 @@ services:
       - no-new-privileges:true
     init: true
     restart: unless-stopped
-    # Hard resource caps so a malicious or pathological PDF cannot exhaust host
-    # memory or spawn child processes. 512 MiB covers pdfjs in-memory document +
-    # text content for a 12 MiB source PDF; pids_limit prevents fork / worker
-    # abuse; ulimit core=0 ensures no core dump is written.
+    # Resource caps mirror the legacy pdf-extractor-sidecar so a malicious or
+    # pathological PDF cannot exhaust host memory. pdfjs holds the document in
+    # memory; 512 MiB covers a 12 MiB source PDF plus extracted text.
     mem_limit: 512m
     memswap_limit: 512m
     pids_limit: 100
     ulimits:
       nofile: 1024
       core: 0
+    environment:
+      PORT: "3000"
+      # LLM path is opt-in; if MINIMAX_API_KEY is empty the
+      # extract_pdf_with_llm tool returns 503 and all other tools work.
+      MINIMAX_API_KEY: ${MINIMAX_API_KEY:-}
+      MINIMAX_BASE_URL: ${MINIMAX_BASE_URL:-https://api.minimax.io/v1}
+      MINIMAX_MODEL: ${MINIMAX_MODEL:-MiniMax-M3}
+      WORKSPACE_ROOT: /home/node/.openclaw/workspace
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
@@ -290,6 +297,7 @@ services:
       start_period: 10s
     networks:
       - pdf-mcp-internal
+      - pdf-egress
 
 networks:
   default:
@@ -334,5 +342,9 @@ networks:
 
   pdf-mcp-internal:
     internal: true
+    driver_opts:
+      com.docker.network.driver.mtu: "1400"
+
+  pdf-egress:
     driver_opts:
       com.docker.network.driver.mtu: "1400"
