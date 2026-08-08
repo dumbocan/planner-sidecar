@@ -1549,7 +1549,7 @@ test('extractPdfInFolder facade rejects non-PDF data without calling the extract
   const tools = createMailTools({
     state: {},
     intake: { fetchAttachmentPart: async () => ({ data: Buffer.from('Not a PDF at all') }) },
-    pdfExtractor: {
+    pdfToolClient: {
       async extract() { extractorCalled = true; return { text: 'should not reach' }; },
     },
   });
@@ -1568,7 +1568,7 @@ test('extractPdfInFolder forwards PDF bytes to the extractor and returns text pl
   const tools = createMailTools({
     state: {},
     intake: { fetchAttachmentPart: async () => ({ folder: 'INBOX.Vitifrigo', part: '2', type: 'application/pdf', filename: 'factura.pdf', size: pdfBytes.length, data: pdfBytes }) },
-    pdfExtractor: {
+    pdfToolClient: {
       async extract(payload) {
         extractPayload = payload;
         return { text: 'Invoice #2024-005\nTotal: 1.234,56€', pages: 1 };
@@ -1599,7 +1599,7 @@ test('extractPdfInFolder caps maxChars and maxPages to the hard ceiling', async 
   const tools = createMailTools({
     state: {},
     intake: { fetchAttachmentPart: async () => ({ data: Buffer.from('%PDF-1.4 content') }) },
-    pdfExtractor: {
+    pdfToolClient: {
       async extract(payload) {
         assert.equal(payload.maxChars, 10_000, 'maxChars must be capped to MAX_PDF_TEXT_CHARS');
         assert.equal(payload.maxPages, 20, 'maxPages must be capped to MAX_PDF_PAGES');
@@ -1623,14 +1623,14 @@ test('extractPdfInFolder surfaces structured invoiceFields while keeping PII red
   const tools = createMailTools({
     state: {},
     intake: { fetchAttachmentPart: async () => ({ data: Buffer.from('%PDF-1.4 invoice') }) },
-    pdfExtractor: {
+    pdfToolClient: {
       async extract() {
         return {
           text: 'Contacto: cobros@vitifrigo.test / +34 928 123 456',
           pages: 1,
           invoiceFields: {
             invoiceNumber: '2024-005',
-            totals: [{ label: 'Total', amount: 1234.56, currency: 'EUR' }],
+            totals: { subtotal: null, tax: null, total: 1234.56 },
           },
         };
       },
@@ -1646,7 +1646,7 @@ test('extractPdfInFolder surfaces structured invoiceFields while keeping PII red
   assert.match(result.text, /\[redacted-phone\]/);
   assert.deepEqual(result.invoiceFields, {
     invoiceNumber: '2024-005',
-    totals: [{ label: 'Total', amount: 1234.56, currency: 'EUR' }],
+    totals: { subtotal: null, tax: null, total: 1234.56 },
   });
 });
 

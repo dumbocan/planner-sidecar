@@ -7,12 +7,14 @@ import { z } from 'zod';
 
 import { ImapIntake } from './imap-client.js';
 import { ImapState } from './state.js';
+import { createPdfToolClient } from './pdf-tool-client.js';
 import { createMailTools, formatImapToolFailure, MAX_PDF_TEXT_CHARS, MAX_PDF_PAGES } from './tools.js';
 
 const port = Number(process.env.PORT ?? 3000);
 const state = new ImapState();
 const intake = new ImapIntake({ state });
-const tools = createMailTools({ state, intake, synchronize: () => intake.synchronize() });
+const pdfToolClient = createPdfToolClient();
+const tools = createMailTools({ state, intake, synchronize: () => intake.synchronize(), pdfToolClient });
 const sessions = new Map();
 
 function result(value) {
@@ -84,7 +86,7 @@ function createMcpServer() {
     try { return result(await tools.listAttachmentsInFolder(input)); } catch (error) { return failure('mail_list_attachments_in_folder', error); }
   });
   server.registerTool('mail_extract_pdf_in_folder', {
-    description: 'Extract text from a PDF attachment in a specific message by folder, UID, and MIME part number. Requires confirm:true. The PDF bytes are sent to the pdf-extractor-sidecar container; the extracted text is returned with a trustBoundary warning. The agent must surface the attachment filename to Javier and wait for explicit confirmation of one specific part before calling this tool.',
+    description: 'Extract text from a PDF attachment in a specific message by folder, UID, and MIME part number. Requires confirm:true. The PDF bytes are sent to the pdf-tool-sidecar container; the extracted text is returned with a trustBoundary warning. The agent must surface the attachment filename to Javier and wait for explicit confirmation of one specific part before calling this tool.',
     inputSchema: z.object({
       folder: z.string().min(1).max(256),
       uid: z.number().int().min(1),

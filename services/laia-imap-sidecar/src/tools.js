@@ -1,4 +1,4 @@
-import { createPdfExtractorClient, PdfExtractorError } from './pdf-extractor-client.js';
+import { createPdfToolClient } from './pdf-tool-client.js';
 
 export const TOOL_NAMES = [
   'mail_list_digest_candidates',
@@ -154,7 +154,10 @@ export function createReadOnlyImapClientOptions(credentials) {
   };
 }
 
-export function createMailTools({ state, intake, synchronize = async () => {}, pdfExtractor = createPdfExtractorClient() }) {
+export function createMailTools({ state, intake, synchronize = async () => {}, pdfToolClient = createPdfToolClient() }) {
+  if (!pdfToolClient || typeof pdfToolClient.extract !== 'function') {
+    throw new TypeError('pdfToolClient dependency is required');
+  }
   async function beforeRead() {
     await synchronize();
   }
@@ -282,10 +285,11 @@ export function createMailTools({ state, intake, synchronize = async () => {}, p
         MAX_PDF_PAGES,
       );
 
-      const extraction = await pdfExtractor.extract({
+      const extraction = await pdfToolClient.extract({
         data: fetched.data.toString('base64'),
         maxChars: requestedChars,
         maxPages: requestedPages,
+        name: fetched.filename || null,
       });
       const truncated = sanitizeExcerpt(extraction?.text ?? '', requestedChars);
       const invoiceFields = extraction?.invoiceFields && typeof extraction.invoiceFields === 'object'
