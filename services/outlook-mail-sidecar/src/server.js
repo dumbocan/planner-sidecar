@@ -8,7 +8,7 @@ import { z } from "zod";
 import { createAuthClient, getAccessToken } from "./auth.js";
 import { createGraphClient } from "./graph-client.js";
 import { readBoundedJsonBody, HttpBodyTooLargeError } from "./http-bound.js";
-import { createPdfExtractorClient } from "./pdf-extractor-client.js";
+import { createPdfToolClient } from "./pdf-tool-client.js";
 import { resolveClientId } from "./setup.js";
 import { createReadTools } from "./tools.js";
 
@@ -18,19 +18,27 @@ const sessions = new Map();
 
 export async function createServiceTools({
   stateDir = process.env.OUTLOOK_STATE_DIR,
+  workspaceRoot = process.env.OUTLOOK_WORKSPACE_ROOT || process.env.WORKSPACE_ROOT,
   env = process.env,
   createAuthClientImpl = createAuthClient,
   createGraphClientImpl = createGraphClient,
   getAccessTokenImpl = getAccessToken,
-  createPdfExtractorClientImpl = createPdfExtractorClient,
+  createPdfToolClientImpl = createPdfToolClient,
 } = {}) {
+  const resolvedWorkspaceRoot = workspaceRoot
+    ? path.resolve(workspaceRoot)
+    : null;
   const { clientId } = await resolveClientId({ stateDir, env, isInteractive: false });
   const auth = await createAuthClientImpl({ clientId, stateDir });
   const graph = createGraphClientImpl({
     getAccessToken: (options) => getAccessTokenImpl({ client: auth, ...options }),
   });
-  const pdfExtractor = createPdfExtractorClientImpl();
-  return createReadTools(graph, { pdfExtractor });
+  const pdfToolClient = createPdfToolClientImpl();
+  return createReadTools(graph, {
+    pdfToolClient,
+    stateDir,
+    workspaceRoot: resolvedWorkspaceRoot,
+  });
 }
 
 async function getTools() {
@@ -39,19 +47,49 @@ async function getTools() {
   })();
   return toolsPromise;
 }
-function result(value) {
+export const GENERIC_ERROR_TEXT = "Outlook read-only mail integration is unavailable.";
+
+export const GRAPH_ERROR_MESSAGES = {
+  400: "Outlook rejected the request as malformed. Verify the messageId, attachmentId, or query.",
+  401: "Outlook authentication has expired or is invalid. Re-run `outlook-mail-sidecar onboard`.",
+  403: "Outlook denied access. The account may lack the required permissions for this mailbox.",
+  404: "The Outlook message or attachment was not found. It may have been deleted or the identifier is incorrect.",
+  429: "Outlook is rate-limiting requests. Retry shortly with smaller batches.",
+  500: "Outlook returned an internal error. Retry shortly.",
+  502: "Outlook is unreachable through the gateway. Retry shortly.",
+  503: "Outlook is temporarily unavailable. Retry shortly.",
+  504: "Outlook timed out. Retry shortly.",
+};
+
+function graphStatusFromError(error) {
+  return typeof error?.status === "number" ? error.status : null;
+}
+
+export function result(value) {
   return { content: [{ type: "text", text: JSON.stringify(value) }] };
 }
-function failure(tool, error) {
+export function failure(tool, error) {
+  const status = graphStatusFromError(error);
+  const errorName = error?.constructor?.name ?? "Error";
+  // Log the real diagnostic context so a failed Mercadona batch is recoverable
+  // from docker logs without re-running anything. Never include token, body, or
+  // attachment bytes — only request coordinates.
   console.error(
     JSON.stringify({
       event: "outlook_tool_failure",
       tool,
-      error: error?.constructor?.name ?? "Error",
+      error: errorName,
+      status,
+      method: typeof error?.method === "string" ? error.method : null,
+      url: typeof error?.url === "string" ? error.url : null,
     }),
   );
+  const text =
+    status != null && GRAPH_ERROR_MESSAGES[status]
+      ? GRAPH_ERROR_MESSAGES[status]
+      : GENERIC_ERROR_TEXT;
   return {
-    content: [{ type: "text", text: "Outlook read-only mail integration is unavailable." }],
+    content: [{ type: "text", text }],
     isError: true,
   };
 }
@@ -174,6 +212,26 @@ function createMcpServer() {
         return result(await (await getTools()).extractPdfAttachment(input));
       } catch (error) {
         return failure("outlook_extract_pdf_attachment", error);
+      }
+    },
+  );
+  server.registerTool(
+    "outlook_save_pdf_attachment",
+    {
+      description:
+        "Save one named PDF attachment of one Outlook message to disk inside the sidecar state directory. Requires confirm:true. Manual-only; never auto-runs based on sender or content. Returns the resolved saved path, file size, and a trust boundary. Use to persist Mercadona invoices and other invoices for later offline review.",
+      inputSchema: z.object({
+        messageId: z.string().min(1).max(512),
+        attachmentId: z.string().min(1).max(512),
+        confirm: z.literal(true),
+        outDir: z.string().min(1).max(256),
+      }),
+    },
+    async (input) => {
+      try {
+        return result(await (await getTools()).savePdfAttachment(input));
+      } catch (error) {
+        return failure("outlook_save_pdf_attachment", error);
       }
     },
   );

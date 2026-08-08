@@ -8,7 +8,7 @@ import { persistClientId } from "../src/setup.js";
 
 const CLIENT_ID = "11111111-2222-3333-4444-555555555555";
 
-function stubPdfExtractor() {
+function stubPdfToolClient() {
   return { extract: async () => ({ text: "stub", pages: 1, truncated: false }) };
 }
 
@@ -32,7 +32,7 @@ test("createServiceTools loads the persisted client ID used by the container", a
         getAttachmentMetadata: async () => ({}),
         getAttachmentRawContent: async () => Buffer.alloc(0),
       }),
-      createPdfExtractorClientImpl: stubPdfExtractor,
+      createPdfToolClientImpl: stubPdfToolClient,
     });
     assert.equal(receivedClientId, CLIENT_ID);
     assert.equal(typeof tools.listFolders, "function");

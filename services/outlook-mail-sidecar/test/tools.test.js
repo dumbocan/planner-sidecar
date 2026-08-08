@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { OUTLOOK_TOOL_NAMES, createReadTools } from "../src/tools.js";
 
-function stubPdfExtractor(impl) {
+function stubPdfToolClient(impl) {
   return { extract: impl ?? (async () => ({ text: "stub", pages: 1, truncated: false })) };
 }
 
@@ -15,6 +15,7 @@ test("exposes the Outlook read-only and manual-PDF tool inventory", () => {
     "outlook_list_attachments",
     "outlook_list_pdf_attachments",
     "outlook_extract_pdf_attachment",
+    "outlook_save_pdf_attachment",
   ]);
   // No write/mutation tool may live in the inventory. PDF reads are still
   // strictly manual-only: there is no auto-download or batch tool.
@@ -40,7 +41,7 @@ test("bounds list and search inputs and returns only the opaque handles needed f
       body: { contentType: "text", content: "Body" },
     }),
   };
-  const tools = createReadTools(graph, { pdfExtractor: stubPdfExtractor() });
+  const tools = createReadTools(graph, { pdfToolClient: stubPdfToolClient() });
   const folders = await tools.listFolders({ limit: 999 });
   const messages = await tools.listMessages({ folderId: "folder-id", limit: 999 });
   const search = await tools.searchMessages({ query: "hello", folderId: "folder-id", limit: 999 });
@@ -92,7 +93,7 @@ test("listPdfAttachments filters to PDF-only rows and returns sanitized metadata
       },
     ],
   };
-  const tools = createReadTools(graph, { pdfExtractor: stubPdfExtractor() });
+  const tools = createReadTools(graph, { pdfToolClient: stubPdfToolClient() });
   const list = await tools.listPdfAttachments({ messageId: "msg-1" });
   assert.equal(list.length, 2);
   assert.equal(list[0].attachmentId, "att-pdf-1");
@@ -137,7 +138,7 @@ test("listPdfAttachments matches .pdf filename even when contentType is mislabel
       },
     ],
   };
-  const tools = createReadTools(graph, { pdfExtractor: stubPdfExtractor() });
+  const tools = createReadTools(graph, { pdfToolClient: stubPdfToolClient() });
   const list = await tools.listPdfAttachments({ messageId: "msg-1" });
   assert.equal(list.length, 1);
   assert.equal(list[0].attachmentId, "att-mercadona");
@@ -189,7 +190,7 @@ test("listAttachments returns classified safe metadata for all three attachment 
       },
     ],
   };
-  const tools = createReadTools(graph, { pdfExtractor: stubPdfExtractor() });
+  const tools = createReadTools(graph, { pdfToolClient: stubPdfToolClient() });
   const list = await tools.listAttachments({ messageId: "msg-1" });
   assert.equal(list.length, 4);
 
@@ -227,7 +228,7 @@ test("listAttachments caps the result count and sanitizes name length", async ()
         "@odata.type": "#microsoft.graph.fileAttachment",
       })),
   };
-  const tools = createReadTools(graph, { pdfExtractor: stubPdfExtractor() });
+  const tools = createReadTools(graph, { pdfToolClient: stubPdfToolClient() });
   const list = await tools.listAttachments({ messageId: "msg-1", limit: 999 });
   assert.equal(list.length, 50);
   // The 50th entry's name is bounded by MAX_ATTACHMENT_NAME (256) and the
@@ -247,7 +248,7 @@ test("listAttachments treats unknown @odata.type as kind:unknown and never claim
       },
     ],
   };
-  const tools = createReadTools(graph, { pdfExtractor: stubPdfExtractor() });
+  const tools = createReadTools(graph, { pdfToolClient: stubPdfToolClient() });
   const list = await tools.listAttachments({ messageId: "msg-1" });
   assert.equal(list[0].kind, "unknown");
   assert.equal(list[0].isPdf, undefined);
@@ -265,7 +266,7 @@ test("listPdfAttachments caps the result count even if the caller asks for more"
         "@odata.type": "#microsoft.graph.fileAttachment",
       })),
   };
-  const tools = createReadTools(graph, { pdfExtractor: stubPdfExtractor() });
+  const tools = createReadTools(graph, { pdfToolClient: stubPdfToolClient() });
   const list = await tools.listPdfAttachments({ messageId: "msg-1", limit: 999 });
   assert.equal(list.length, 50);
 });
@@ -275,7 +276,7 @@ test("extractPdfAttachment rejects when confirm is not exactly true", async () =
     getAttachmentMetadata: async () => ({}),
     getAttachmentRawContent: async () => Buffer.from(""),
   };
-  const tools = createReadTools(graph, { pdfExtractor: stubPdfExtractor() });
+  const tools = createReadTools(graph, { pdfToolClient: stubPdfToolClient() });
   await assert.rejects(
     () => tools.extractPdfAttachment({ messageId: "msg-1", attachmentId: "att-1" }),
     /confirm/,
@@ -306,7 +307,7 @@ test("extractPdfAttachment rejects non-PDF contentTypes before downloading bytes
       return Buffer.from("");
     },
   };
-  const tools = createReadTools(graph, { pdfExtractor: stubPdfExtractor() });
+  const tools = createReadTools(graph, { pdfToolClient: stubPdfToolClient() });
   await assert.rejects(
     () => tools.extractPdfAttachment({ messageId: "msg-1", attachmentId: "att-1", confirm: true }),
     /not a PDF/i,
@@ -329,8 +330,8 @@ test("extractPdfAttachment accepts fileAttachment with .pdf filename even when c
     }),
     getAttachmentRawContent: async () => Buffer.from("%PDF-1.4\nstub"),
   };
-  const pdfExtractor = stubPdfExtractor(async () => ({ text: "Mercadona factura", pages: 1, truncated: false }));
-  const tools = createReadTools(graph, { pdfExtractor });
+  const pdfToolClient = stubPdfToolClient(async () => ({ text: "Mercadona factura", pages: 1, truncated: false }));
+  const tools = createReadTools(graph, { pdfToolClient });
   const result = await tools.extractPdfAttachment({
     messageId: "msg-1",
     attachmentId: "att-mercadona",
@@ -356,7 +357,7 @@ test("extractPdfAttachment still rejects itemAttachment even when its name ends 
       return Buffer.from("");
     },
   };
-  const tools = createReadTools(graph, { pdfExtractor: stubPdfExtractor() });
+  const tools = createReadTools(graph, { pdfToolClient: stubPdfToolClient() });
   await assert.rejects(
     () => tools.extractPdfAttachment({ messageId: "msg-1", attachmentId: "att-item", confirm: true }),
     /Only file attachments/i,
@@ -376,7 +377,7 @@ test("extractPdfAttachment rejects oversized attachments at the metadata layer",
     }),
     getAttachmentRawContent: async () => Buffer.from("%PDF-1.4\n"),
   };
-  const tools = createReadTools(graph, { pdfExtractor: stubPdfExtractor() });
+  const tools = createReadTools(graph, { pdfToolClient: stubPdfToolClient() });
   await assert.rejects(
     () => tools.extractPdfAttachment({ messageId: "msg-1", attachmentId: "att-huge", confirm: true }),
     /size limit/i,
@@ -395,7 +396,7 @@ test("extractPdfAttachment rejects payloads without PDF magic", async () => {
     }),
     getAttachmentRawContent: async () => Buffer.from("not a real PDF"),
   };
-  const tools = createReadTools(graph, { pdfExtractor: stubPdfExtractor() });
+  const tools = createReadTools(graph, { pdfToolClient: stubPdfToolClient() });
   await assert.rejects(
     () => tools.extractPdfAttachment({ messageId: "msg-1", attachmentId: "att-1", confirm: true }),
     /magic/i,
@@ -415,7 +416,7 @@ test("extractPdfAttachment forwards the PDF bytes to the extractor and returns s
     }),
     getAttachmentRawContent: async () => Buffer.concat([Buffer.from("%PDF-1.4\n"), Buffer.alloc(64, 0)]),
   };
-  const pdfExtractor = stubPdfExtractor(async (payload) => {
+  const pdfToolClient = stubPdfToolClient(async (payload) => {
     seen.calls += 1;
     assert.equal(typeof payload.data, "string");
     assert.ok(payload.data.length > 0);
@@ -425,7 +426,7 @@ test("extractPdfAttachment forwards the PDF bytes to the extractor and returns s
       truncated: false,
     };
   });
-  const tools = createReadTools(graph, { pdfExtractor });
+  const tools = createReadTools(graph, { pdfToolClient });
   const result = await tools.extractPdfAttachment({
     messageId: "msg-1",
     attachmentId: "att-pdf",
@@ -457,11 +458,11 @@ test("extractPdfAttachment caps maxChars / maxPages to the hard ceiling", async 
     }),
     getAttachmentRawContent: async () => Buffer.from("%PDF-1.4\n"),
   };
-  const pdfExtractor = stubPdfExtractor(async (payload) => {
+  const pdfToolClient = stubPdfToolClient(async (payload) => {
     seen.payload = payload;
     return { text: "", pages: 0, truncated: true };
   });
-  const tools = createReadTools(graph, { pdfExtractor });
+  const tools = createReadTools(graph, { pdfToolClient });
   await tools.extractPdfAttachment({
     messageId: "msg-1",
     attachmentId: "att-pdf",
@@ -473,10 +474,10 @@ test("extractPdfAttachment caps maxChars / maxPages to the hard ceiling", async 
   assert.ok(seen.payload.maxPages <= 200);
 });
 
-test("createReadTools throws when the pdfExtractor dependency is missing", () => {
+test("createReadTools throws when the pdfToolClient dependency is missing", () => {
   assert.throws(
     () => createReadTools({ listFolders: async () => [], listMessages: async () => [], getMessage: async () => ({}) }),
-    /pdfExtractor/,
+    /pdfToolClient/,
   );
 });
 
@@ -493,7 +494,7 @@ test("extractPdfAttachment surfaces structured invoiceFields while keeping globa
     getAttachmentRawContent: async () =>
       Buffer.concat([Buffer.from("%PDF-1.4\n"), Buffer.alloc(64, 0)]),
   };
-  const pdfExtractor = stubPdfExtractor(async () => ({
+  const pdfToolClient = stubPdfToolClient(async () => ({
     text:
       "MERCADONA, S.A.\nNº Factura: 2600-001-12345\n" +
       "Fecha Factura: 27/07/2026\nFecha factura simplificada: 27/07/2026\n" +
@@ -514,7 +515,7 @@ test("extractPdfAttachment surfaces structured invoiceFields while keeping globa
       trustBoundary: "test",
     },
   }));
-  const tools = createReadTools(graph, { pdfExtractor });
+  const tools = createReadTools(graph, { pdfToolClient });
   const result = await tools.extractPdfAttachment({
     messageId: "msg-1",
     attachmentId: "att-mercadona",
