@@ -1,0 +1,19 @@
+{
+  "name": "pdf-tool-sidecar",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Generic PDF extraction MCP sidecar. Uses pdfjs-dist for text extraction and parses Mercadona-style tabular line items.",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/**/*.test.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "pdfjs-dist": "4.10.38",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "pdf-lib": "1.17.1"
+  }
+}
