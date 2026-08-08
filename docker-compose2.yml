@@ -1,0 +1,350 @@
+x-openclaw-gentle-ai: &openclaw-gentle-ai
+  image: openclaw-gentle-ai:2.1.11
+  build:
+    context: ./docker/gentle-ai
+
+services:
+  openclaw-gateway:
+    <<: *openclaw-gentle-ai
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      HOME: /home/node
+      OPENCLAW_HOME: /home/node
+      TERM: xterm-256color
+      # Pin container-side state, workspace, and config paths so host values written to
+      # `.env` (used by Compose for the bind-mount source below) cannot leak
+      # into runtime code that resolves these env vars inside the container.
+      # Without this override, a macOS host path like /Users/<you>/.openclaw/...
+      # imported from .env caused first-reply `mkdir '/Users'` EACCES failures
+      # in Linux Docker (#77436).
+      OPENCLAW_STATE_DIR: /home/node/.openclaw
+      OPENCLAW_CONFIG_PATH: /home/node/.openclaw/openclaw.json
+      OPENCLAW_CONFIG_DIR: /home/node/.openclaw
+      OPENCLAW_WORKSPACE_DIR: /home/node/.openclaw/workspace
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-}
+      OPENCLAW_ALLOW_INSECURE_PRIVATE_WS: ${OPENCLAW_ALLOW_INSECURE_PRIVATE_WS:-}
+      # Empty means auto: Bonjour disables itself in detected containers.
+      # Set 0 only on host/macvlan/mDNS-capable networks; set 1 to force off.
+      OPENCLAW_DISABLE_BONJOUR: ${OPENCLAW_DISABLE_BONJOUR:-}
+      # OpenTelemetry export is outbound OTLP/HTTP from the Gateway. Prometheus
+      # uses the existing authenticated Gateway route; it does not need a port.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: ${OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: ${OTEL_EXPORTER_OTLP_LOGS_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-}
+      OTEL_SEMCONV_STABILITY_OPT_IN: ${OTEL_SEMCONV_STABILITY_OPT_IN:-}
+      OPENCLAW_OTEL_PRELOADED: ${OPENCLAW_OTEL_PRELOADED:-}
+      CLAUDE_AI_SESSION_KEY: ${CLAUDE_AI_SESSION_KEY:-}
+      CLAUDE_WEB_SESSION_KEY: ${CLAUDE_WEB_SESSION_KEY:-}
+      CLAUDE_WEB_COOKIE: ${CLAUDE_WEB_COOKIE:-}
+      TZ: ${OPENCLAW_TZ:-UTC}
+    volumes:
+      - "${OPENCLAW_CONFIG_DIR:-${HOME:-/tmp}/.openclaw}:/home/node/.openclaw"
+      - "${OPENCLAW_WORKSPACE_DIR:-${HOME:-/tmp}/.openclaw/workspace}:/home/node/.openclaw/workspace"
+      - "${OPENCLAW_AUTH_PROFILE_SECRET_DIR:-${HOME:-/tmp}/.openclaw-auth-profile-secrets}:/home/node/.config/openclaw"
+      - "./engram/bin/engram:/usr/local/bin/engram:ro"
+      - "./engram/data:/home/node/.engram"
+      ## Uncomment the lines below to enable sandbox isolation
+      ## (agents.defaults.sandbox). Requires Docker CLI in the image
+      ## (build with --build-arg OPENCLAW_INSTALL_DOCKER_CLI=1) or use
+      ## scripts/docker/setup.sh with OPENCLAW_SANDBOX=1 for automated setup.
+      ## Set DOCKER_GID to the host's docker group GID (run: stat -c '%g' /var/run/docker.sock).
+      # - /var/run/docker.sock:/var/run/docker.sock
+    # group_add:
+    #   - "${DOCKER_GID:-999}"
+    # Let bundled local-model providers reach host-side LM Studio/Ollama via
+    # http://host.docker.internal:<port>. Docker Desktop usually provides this
+    # alias; the host-gateway mapping makes it work on Linux Docker Engine too.
+    cap_drop:
+      - NET_RAW
+      - NET_ADMIN
+    security_opt:
+      - no-new-privileges:true
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:${OPENCLAW_GATEWAY_PORT:-18789}:18789"
+    init: true
+    restart: unless-stopped
+    command:
+      [
+        "node",
+        "dist/index.js",
+        "gateway",
+        "--bind",
+        "${OPENCLAW_GATEWAY_BIND:-lan}",
+        "--port",
+        "18789",
+      ]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:18789/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - default
+      - google-mcp-internal
+      - imap-mcp-internal
+      - planner-mcp-internal
+      - outlook-mcp-internal
+
+  openclaw-cli:
+    <<: *openclaw-gentle-ai
+    network_mode: "service:openclaw-gateway"
+    env_file:
+      - path: .env
+        required: false
+    cap_drop:
+      - NET_RAW
+      - NET_ADMIN
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      HOME: /home/node
+      OPENCLAW_HOME: /home/node
+      TERM: xterm-256color
+      # Pin container-side state, workspace, and config paths so host values written to
+      # `.env` cannot leak into runtime code via the env_file import (#77436).
+      OPENCLAW_STATE_DIR: /home/node/.openclaw
+      OPENCLAW_CONFIG_PATH: /home/node/.openclaw/openclaw.json
+      OPENCLAW_CONFIG_DIR: /home/node/.openclaw
+      OPENCLAW_WORKSPACE_DIR: /home/node/.openclaw/workspace
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-}
+      OPENCLAW_ALLOW_INSECURE_PRIVATE_WS: ${OPENCLAW_ALLOW_INSECURE_PRIVATE_WS:-}
+      BROWSER: echo
+      CLAUDE_AI_SESSION_KEY: ${CLAUDE_AI_SESSION_KEY:-}
+      CLAUDE_WEB_SESSION_KEY: ${CLAUDE_WEB_SESSION_KEY:-}
+      CLAUDE_WEB_COOKIE: ${CLAUDE_WEB_COOKIE:-}
+      TZ: ${OPENCLAW_TZ:-UTC}
+    volumes:
+      - "${OPENCLAW_CONFIG_DIR:-${HOME:-/tmp}/.openclaw}:/home/node/.openclaw"
+      - "${OPENCLAW_WORKSPACE_DIR:-${HOME:-/tmp}/.openclaw/workspace}:/home/node/.openclaw/workspace"
+      - "${OPENCLAW_AUTH_PROFILE_SECRET_DIR:-${HOME:-/tmp}/.openclaw-auth-profile-secrets}:/home/node/.config/openclaw"
+      - "./engram/bin/engram:/usr/local/bin/engram:ro"
+      - "./engram/data:/home/node/.engram"
+    stdin_open: true
+    tty: true
+    init: true
+    entrypoint: ["node", "dist/index.js"]
+    depends_on:
+      - openclaw-gateway
+
+  google-read-sidecar:
+    image: openclaw-google-read-sidecar:local
+    build:
+      context: ./services/google-read-sidecar
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    volumes:
+      - "./google-secrets:/run/secrets/google-read-only:ro"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - google-mcp-internal
+      - google-egress
+
+  laia-imap-sidecar:
+    image: laia-imap-sidecar:local
+    build:
+      context: ./services/laia-imap-sidecar
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    volumes:
+      - "./imap-secrets:/run/secrets/imap-read-only:ro"
+      - "./imap-state:/var/lib/laia-imap"
+    environment:
+      IMAP_BOOTSTRAP_DAYS: "${IMAP_BOOTSTRAP_DAYS:-30}"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - imap-mcp-internal
+      - imap-egress
+      - pdf-mcp-internal
+
+  planner-sidecar:
+    image: planner-sidecar:local
+    build:
+      context: ./services/planner-sidecar
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    volumes:
+      - "./planner-state:/app/planner-state"
+    environment:
+      PORT: "3000"
+      PLANNER_TENANT: "${PLANNER_TENANT:-common}"
+      PLANNER_CLIENT_ID: "${PLANNER_CLIENT_ID:-}"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - planner-mcp-internal
+      - planner-egress
+
+  outlook-mail-sidecar:
+    image: outlook-mail-sidecar:local
+    build:
+      context: ./services/outlook-mail-sidecar
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    volumes:
+      - "./outlook-state:/var/lib/outlook-mail"
+    environment:
+      PORT: "3000"
+      OUTLOOK_CLIENT_ID: "${OUTLOOK_CLIENT_ID:-}"
+      OUTLOOK_STATE_DIR: /var/lib/outlook-mail
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - outlook-mcp-internal
+      - outlook-egress
+      - pdf-mcp-internal
+
+  pdf-tool-sidecar:
+    image: pdf-tool-sidecar:local
+    build:
+      context: ./services/pdf-tool-sidecar
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    restart: unless-stopped
+    # Resource caps mirror the legacy pdf-extractor-sidecar so a malicious or
+    # pathological PDF cannot exhaust host memory. pdfjs holds the document in
+    # memory; 512 MiB covers a 12 MiB source PDF plus extracted text.
+    mem_limit: 512m
+    memswap_limit: 512m
+    pids_limit: 100
+    ulimits:
+      nofile: 1024
+      core: 0
+    environment:
+      PORT: "3000"
+      # LLM path is opt-in; if MINIMAX_API_KEY is empty the
+      # extract_pdf_with_llm tool returns 503 and all other tools work.
+      MINIMAX_API_KEY: ${MINIMAX_API_KEY:-}
+      MINIMAX_BASE_URL: ${MINIMAX_BASE_URL:-https://api.minimax.io/v1}
+      MINIMAX_MODEL: ${MINIMAX_MODEL:-MiniMax-M3}
+      WORKSPACE_ROOT: /home/node/.openclaw/workspace
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - pdf-mcp-internal
+      - pdf-egress
+
+networks:
+  default:
+    driver_opts:
+      com.docker.network.driver.mtu: "1400"
+
+  google-mcp-internal:
+    internal: true
+    driver_opts:
+      com.docker.network.driver.mtu: "1400"
+
+  google-egress:
+    driver_opts:
+      com.docker.network.driver.mtu: "1400"
+
+  imap-mcp-internal:
+    internal: true
+    driver_opts:
+      com.docker.network.driver.mtu: "1400"
+
+  imap-egress:
+    driver_opts:
+      com.docker.network.driver.mtu: "1400"
+
+  planner-mcp-internal:
+    internal: true
+    driver_opts:
+      com.docker.network.driver.mtu: "1400"
+
+  planner-egress:
+    driver_opts:
+      com.docker.network.driver.mtu: "1400"
+
+  outlook-mcp-internal:
+    internal: true
+    driver_opts:
+      com.docker.network.driver.mtu: "1400"
+
+  outlook-egress:
+    driver_opts:
+      com.docker.network.driver.mtu: "1400"
+
+  pdf-mcp-internal:
+    internal: true
+    driver_opts:
+      com.docker.network.driver.mtu: "1400"
+
+  pdf-egress:
+    driver_opts:
+      com.docker.network.driver.mtu: "1400"
