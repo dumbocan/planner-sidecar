@@ -4,7 +4,7 @@ import test from 'node:test';
 import {
   ALLOWED_SCOPES,
   TOOL_NAMES,
-  createReadTools,
+  createReadTools as createReadToolsImpl,
   validateGrantedScopes,
 } from '../src/tools.js';
 
@@ -13,6 +13,33 @@ function mockAccounts({ gmail = {}, calendar = {}, people = {} } = {}) {
     laia: { gmail, calendar, people },
     personal: { gmail, calendar, people },
   };
+}
+
+function stubPdfToolClient() {
+  return {
+    extract: async () => ({
+      text: '',
+      pages: 0,
+      truncated: false,
+      invoiceFields: null,
+      lineItems: [],
+      parser: 'plain-text',
+      parserStats: { lineItemsDetected: 0, lineItemsSkipped: 0, sumLineItemTotals: 0 },
+    }),
+  };
+}
+
+function createReadTools(...args) {
+  // Last argument is the options object; inject pdfToolClient if missing
+  if (args.length >= 2 && typeof args[args.length - 1] === 'object') {
+    const opts = args[args.length - 1];
+    if (!opts.pdfToolClient) {
+      args[args.length - 1] = { ...opts, pdfToolClient: stubPdfToolClient() };
+    }
+  } else {
+    args.push({ pdfToolClient: stubPdfToolClient() });
+  }
+  return createReadToolsImpl(...args);
 }
 
 test('accepts exactly the approved Google scopes', () => {
@@ -334,10 +361,11 @@ test('calendar update and delete forward to calendar.events.patch and delete on 
   assert.equal(calls[1].request.eventId, 'event-1');
 });
 
-test('exports the eleven canonical tool names in canonical order', () => {
+test('exports the twelve canonical tool names in canonical order', () => {
   assert.deepEqual(TOOL_NAMES, [
     'gmail_search',
     'gmail_get_sanitized',
+    'gmail_extract_pdf_attachment',
     'calendar_freebusy',
     'calendar_list_events',
     'calendar_create_event',

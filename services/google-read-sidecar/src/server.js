@@ -6,15 +6,19 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { z } from 'zod';
 
 import { createGoogleClients } from './google-client.js';
+import { createPdfToolClient } from './pdf-tool-client.js';
 import { createReadTools } from './tools.js';
 
 const port = Number(process.env.PORT ?? 3000);
 let clientsPromise;
+let pdfToolClient;
 const sessions = new Map();
 
 async function getTools() {
   clientsPromise ??= createGoogleClients();
-  return createReadTools(await clientsPromise);
+  if (!pdfToolClient) pdfToolClient = createPdfToolClient();
+  const accounts = await clientsPromise;
+  return createReadTools(accounts, { pdfToolClient });
 }
 
 function result(value) {
@@ -42,6 +46,22 @@ function createMcpServer() {
     inputSchema: z.object({ messageId: z.string().min(1).max(128), maxChars: z.number().int().min(1).max(2000).optional(), account: accountField }),
   }, async (input) => {
     try { return result(await (await getTools()).gmailGetSanitized(input)); } catch (error) { return failure(error); }
+  });
+  server.registerTool('gmail_extract_pdf_attachment', {
+    description:
+      'Download a Gmail PDF attachment and extract text, invoice fields, and tabular line items ' +
+      'via pdf-tool MCP. Requires confirm:true. Returns the same extraction shape as ' +
+      'outlook_extract_pdf_attachment plus Gmail message/attachment metadata. Manual-only.',
+    inputSchema: z.object({
+      messageId: z.string().min(1).max(128),
+      attachmentId: z.string().min(1).max(512),
+      confirm: z.literal(true),
+      maxChars: z.number().int().min(1).max(200000).optional(),
+      maxPages: z.number().int().min(1).max(200).optional(),
+      account: accountField,
+    }),
+  }, async (input) => {
+    try { return result(await (await getTools()).gmailExtractPdfAttachment(input)); } catch (error) { return failure(error); }
   });
   server.registerTool('calendar_freebusy', {
     description: 'Read only Calendar free/busy windows. Does not create or modify calendar events.',
