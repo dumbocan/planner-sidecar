@@ -1,0 +1,668 @@
+{
+  "wizard": {
+    "securityAcknowledgedAt": "2026-07-20T17:57:48.631Z",
+    "lastRunAt": "2026-07-21T13:26:59.366Z",
+    "lastRunVersion": "2026.7.1",
+    "lastRunCommand": "onboard",
+    "lastRunMode": "local"
+  },
+  "agents": {
+    "defaults": {
+      "workspace": "/home/node/.openclaw/workspace",
+      "models": {
+        "openai/gpt-5.6-sol": {},
+        "openai/gpt-5.5": {
+          "alias": "Inteligente"
+        },
+        "deepseek/deepseek-v4-flash": {
+          "alias": "Barato"
+        },
+        "minimax/MiniMax-M2.7-highspeed": {
+          "alias": "Diario"
+        },
+        "stepfun/step-3.7-flash": {
+          "alias": "StepFlash"
+        },
+        "stepfun/step-3.5-flash": {},
+        "stepfun/step-3.5-flash-2603": {}
+      },
+      "model": {
+        "primary": "stepfun/step-3.7-flash",
+        "fallbacks": [
+          "minimax/MiniMax-M2.7-highspeed",
+          "openai/gpt-5.5"
+        ]
+      },
+      "sandbox": {
+        "mode": "off"
+      }
+    }
+  },
+  "gateway": {
+    "mode": "local",
+    "auth": {
+      "mode": "token",
+      "token": "6cb477115c446f4aea90f0ca0b18d3cb97f1e6d68fbab3d59d0a3244ce0a84cb",
+      "rateLimit": {
+        "maxAttempts": 10,
+        "windowMs": 60000,
+        "lockoutMs": 300000
+      }
+    },
+    "port": 18789,
+    "bind": "lan",
+    "tailscale": {
+      "mode": "off",
+      "resetOnExit": false
+    },
+    "controlUi": {
+      "allowInsecureAuth": false,
+      "allowedOrigins": [
+        "http://localhost:18789",
+        "http://127.0.0.1:18789"
+      ]
+    },
+    "nodes": {
+      "denyCommands": [
+        "camera.snap",
+        "camera.clip",
+        "screen.record",
+        "contacts.add",
+        "calendar.add",
+        "reminders.add",
+        "sms.send",
+        "sms.search"
+      ]
+    }
+  },
+  "session": {
+    "dmScope": "per-channel-peer"
+  },
+  "tools": {
+    "allow": [
+      "google-read__gmail_search",
+      "google-read__gmail_get_sanitized",
+      "google-read__gmail_extract_pdf_attachment",
+      "google-read__calendar_freebusy",
+      "google-read__calendar_list_events",
+      "google-read__calendar_create_event",
+      "google-read__calendar_update_event",
+      "google-read__calendar_delete_event",
+      "google-read__contacts_search",
+      "google-read__contacts_get",
+      "google-read__contacts_create",
+      "google-read__contacts_update",
+      "laia-imap__mail_list_digest_candidates",
+      "laia-imap__mail_get_sanitized_excerpt",
+      "laia-imap__mail_get_thread_metadata",
+      "laia-imap__mail_list_mailboxes",
+      "laia-imap__mail_search_in_mailbox",
+      "laia-imap__mail_get_sanitized_in_folder",
+      "laia-imap__mail_list_attachments_in_folder",
+      "laia-imap__mail_extract_pdf_in_folder",
+      "outlook-mail__outlook_list_folders",
+      "outlook-mail__outlook_list_messages",
+      "outlook-mail__outlook_search_messages",
+      "outlook-mail__outlook_get_sanitized_message",
+      "outlook-mail__outlook_list_pdf_attachments",
+      "outlook-mail__outlook_extract_pdf_attachment",
+      "pdf-tool__extract_pdf_from_path",
+      "pdf-tool__extract_pdf_from_base64",
+      "pdf-tool__extract_pdf_with_llm",
+      "planner__planner_create_task",
+      "planner__planner_get_task",
+      "planner__planner_list_buckets",
+      "planner__planner_list_plans",
+      "planner__planner_list_profiles",
+      "planner__planner_list_tasks",
+      "planner__planner_status",
+      "planner__planner_update_task",
+      "planner__planner_delete_task",
+      "planner__planner_create_plan",
+      "planner__planner_create_bucket",
+      "planner__planner_update_bucket",
+      "planner__planner_delete_bucket",
+      "isolated-engram__mem_save",
+      "isolated-engram__mem_search",
+      "exec",
+      "tool_search",
+      "message"
+    ],
+    "deny": [
+      "group:web",
+      "browser",
+      "codex_apps__hostinger_mail__*",
+      "codex_apps__*",
+      "http",
+      "fetch",
+      "calendar.add",
+      "gmail_send",
+      "gmail_modify",
+      "google-read__gmail_send",
+      "google-read__gmail_modify",
+      "smtp",
+      "imap_send",
+      "imap_reply",
+      "imap_move",
+      "imap_delete",
+      "imap_flag",
+      "laia-imap__mail_send",
+      "laia-imap__mail_reply",
+      "laia-imap__mail_move",
+      "laia-imap__mail_delete",
+      "laia-imap__mail_flag"
+    ],
+    "web": {
+      "search": {
+        "provider": "duckduckgo",
+        "enabled": true
+      }
+    },
+    "profile": "full",
+    "media": {
+      "audio": {
+        "enabled": true,
+        "models": [
+          {
+            "type": "cli",
+            "command": "/home/node/.openclaw/local-tools/whisper-venv/bin/python",
+            "args": [
+              "/home/node/.openclaw/local-tools/transcribe.py",
+              "{{MediaPath}}"
+            ],
+            "timeoutSeconds": 120
+          }
+        ]
+      },
+      "image": {
+        "enabled": true,
+        "timeoutSeconds": 180,
+        "models": [
+          {
+            "provider": "minimax",
+            "model": "MiniMax-M3",
+            "timeoutSeconds": 300
+          }
+        ]
+      }
+    }
+  },
+  "mcp": {
+    "servers": {
+      "isolated-engram": {
+        "command": "/usr/local/bin/engram",
+        "args": [
+          "mcp",
+          "--tools=mem_search,mem_save"
+        ],
+        "env": {
+          "ENGRAM_DATA_DIR": "/home/node/.engram"
+        },
+        "cwd": "/home/node/.openclaw/workspace",
+        "toolFilter": {
+          "include": [
+            "mem_search",
+            "mem_save"
+          ]
+        }
+      },
+      "google-read": {
+        "url": "http://google-read-sidecar:3000/mcp",
+        "transport": "streamable-http",
+        "connectTimeout": 5,
+        "timeout": 30,
+        "supportsParallelToolCalls": false,
+        "toolFilter": {
+          "include": [
+            "gmail_search",
+            "gmail_get_sanitized",
+            "gmail_extract_pdf_attachment",
+            "calendar_freebusy",
+            "calendar_list_events",
+            "calendar_create_event",
+            "calendar_update_event",
+            "calendar_delete_event",
+            "contacts_search",
+            "contacts_get",
+            "contacts_create",
+            "contacts_update"
+          ]
+        },
+        "codex": {
+          "agents": [
+            "main"
+          ],
+          "defaultToolsApprovalMode": "approve"
+        }
+      },
+      "laia-imap": {
+        "url": "http://laia-imap-sidecar:3000/mcp",
+        "transport": "streamable-http",
+        "connectTimeout": 5,
+        "timeout": 30,
+        "supportsParallelToolCalls": false,
+        "codex": {
+          "agents": [
+            "main"
+          ],
+          "defaultToolsApprovalMode": "approve"
+        },
+        "toolFilter": {
+          "include": [
+            "mail_list_digest_candidates",
+            "mail_get_sanitized_excerpt",
+            "mail_get_thread_metadata",
+            "mail_list_mailboxes",
+            "mail_search_in_mailbox",
+            "mail_get_sanitized_in_folder",
+            "mail_list_attachments_in_folder",
+            "mail_extract_pdf_in_folder"
+          ]
+        }
+      },
+      "outlook-mail": {
+        "url": "http://outlook-mail-sidecar:3000/mcp",
+        "transport": "streamable-http",
+        "connectTimeout": 5,
+        "timeout": 30,
+        "supportsParallelToolCalls": false,
+        "toolFilter": {
+          "include": [
+            "outlook_list_folders",
+            "outlook_list_messages",
+            "outlook_search_messages",
+            "outlook_get_sanitized_message",
+            "outlook_list_pdf_attachments",
+            "outlook_extract_pdf_attachment"
+          ]
+        },
+        "codex": {
+          "agents": [
+            "main"
+          ],
+          "defaultToolsApprovalMode": "approve"
+        }
+      },
+      "pdf-tool": {
+        "url": "http://pdf-tool:3000/mcp",
+        "transport": "streamable-http",
+        "connectTimeout": 5,
+        "timeout": 120,
+        "supportsParallelToolCalls": false,
+        "toolFilter": {
+          "include": [
+            "extract_pdf_from_path",
+            "extract_pdf_from_base64",
+            "extract_pdf_with_llm"
+          ]
+        },
+        "codex": {
+          "agents": [
+            "main"
+          ],
+          "defaultToolsApprovalMode": "approve"
+        }
+      },
+      "planner": {
+        "url": "http://planner-sidecar:3000/mcp",
+        "transport": "streamable-http",
+        "connectTimeout": 5,
+        "timeout": 30,
+        "supportsParallelToolCalls": false,
+        "toolFilter": {
+          "include": [
+            "planner_list_profiles",
+            "planner_status",
+            "planner_list_plans",
+            "planner_list_buckets",
+            "planner_list_tasks",
+            "planner_get_task",
+            "planner_create_task",
+            "planner_update_task",
+            "planner_delete_task",
+            "planner_create_plan",
+            "planner_create_bucket",
+            "planner_update_bucket",
+            "planner_delete_bucket"
+          ]
+        }
+      }
+    }
+  },
+  "plugins": {
+    "entries": {
+      "codex": {
+        "enabled": true,
+        "config": {
+          "codexPlugins": {
+            "enabled": false,
+            "allow_destructive_actions": false
+          }
+        }
+      },
+      "openai": {
+        "enabled": true
+      },
+      "duckduckgo": {
+        "enabled": true
+      },
+      "telegram": {
+        "enabled": true
+      },
+      "deepseek": {
+        "enabled": true
+      },
+      "memory-core": {
+        "config": {
+          "dreaming": {
+            "enabled": true
+          }
+        }
+      }
+    }
+  },
+  "auth": {
+    "profiles": {
+      "openai:dumbo.cat@hotmail.com": {
+        "provider": "openai",
+        "mode": "oauth",
+        "email": "dumbo.cat@hotmail.com"
+      },
+      "deepseek:default": {
+        "provider": "deepseek",
+        "mode": "api_key"
+      },
+      "minimax:default": {
+        "provider": "minimax",
+        "mode": "api_key"
+      },
+      "stepfun:default": {
+        "provider": "stepfun",
+        "mode": "api_key"
+      }
+    }
+  },
+  "skills": {
+    "install": {
+      "nodeManager": "npm"
+    },
+    "entries": {
+      "canvas": {
+        "enabled": false
+      },
+      "xurl": {
+        "enabled": false
+      },
+      "spotify-player": {
+        "enabled": false
+      },
+      "sonoscli": {
+        "enabled": false
+      },
+      "songsee": {
+        "enabled": false
+      },
+      "sag": {
+        "enabled": false
+      },
+      "openhue": {
+        "enabled": false
+      },
+      "notion": {
+        "enabled": false
+      },
+      "meme-maker": {
+        "enabled": false
+      },
+      "eightctl": {
+        "enabled": false
+      },
+      "coding-agent": {
+        "enabled": true
+      },
+      "camsnap": {
+        "enabled": false
+      }
+    }
+  },
+  "hooks": {
+    "internal": {
+      "entries": {
+        "session-memory": {
+          "enabled": true
+        }
+      }
+    }
+  },
+  "meta": {
+    "lastTouchedVersion": "2026.7.1",
+    "lastTouchedAt": "2026-08-03T00:27:31.296Z"
+  },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "8894775060:AAFB_rBOiSqUkDz8t4cvt-N3OKaBuMf_5-c",
+      "direct": {
+        "1345901933": {
+          "tools": {
+            "allow": [
+              "google-read__gmail_search",
+              "google-read__gmail_get_sanitized",
+              "google-read__gmail_extract_pdf_attachment",
+              "google-read__calendar_freebusy",
+              "google-read__calendar_list_events",
+              "google-read__calendar_create_event",
+              "google-read__calendar_update_event",
+              "google-read__calendar_delete_event",
+              "google-read__contacts_search",
+              "google-read__contacts_get",
+              "google-read__contacts_create",
+              "google-read__contacts_update",
+              "laia-imap__mail_list_digest_candidates",
+              "laia-imap__mail_get_sanitized_excerpt",
+              "laia-imap__mail_get_thread_metadata",
+              "laia-imap__mail_list_mailboxes",
+              "laia-imap__mail_search_in_mailbox",
+              "laia-imap__mail_get_sanitized_in_folder",
+              "laia-imap__mail_list_attachments_in_folder",
+              "laia-imap__mail_extract_pdf_in_folder",
+              "outlook-mail__outlook_list_folders",
+              "outlook-mail__outlook_list_messages",
+              "outlook-mail__outlook_search_messages",
+              "outlook-mail__outlook_get_sanitized_message",
+              "outlook-mail__outlook_list_pdf_attachments",
+              "outlook-mail__outlook_extract_pdf_attachment",
+              "pdf-tool__extract_pdf_from_path",
+              "pdf-tool__extract_pdf_from_base64",
+              "pdf-tool__extract_pdf_with_llm",
+              "isolated-engram__mem_save",
+              "isolated-engram__mem_search",
+              "exec",
+              "tool_search",
+              "web_fetch",
+              "web_search",
+              "browser",
+              "message"
+            ],
+            "deny": [
+              "calendar.add",
+              "gmail_send",
+              "gmail_modify",
+              "google-read__gmail_send",
+              "google-read__gmail_modify",
+              "smtp",
+              "imap_send",
+              "imap_reply",
+              "imap_move",
+              "imap_delete",
+              "imap_flag",
+              "laia-imap__mail_send",
+              "laia-imap__mail_reply",
+              "laia-imap__mail_move",
+              "laia-imap__mail_delete",
+              "laia-imap__mail_flag"
+            ]
+          }
+        }
+      }
+    },
+    "modelByChannel": {
+      "telegram": {
+        "1345901933": "stepfun/step-3.7-flash"
+      }
+    }
+  },
+  "commands": {
+    "ownerAllowFrom": [
+      "telegram:1345901933"
+    ]
+  },
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "deepseek": {
+        "baseUrl": "https://api.deepseek.com",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "deepseek-v4-flash",
+            "name": "DeepSeek V4 Flash",
+            "reasoning": true,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0.14,
+              "output": 0.28,
+              "cacheRead": 0.028,
+              "cacheWrite": 0
+            },
+            "contextWindow": 1000000,
+            "maxTokens": 384000,
+            "compat": {
+              "supportsReasoningEffort": true,
+              "supportsUsageInStreaming": true,
+              "maxTokensField": "max_tokens"
+            },
+            "api": "openai-completions"
+          },
+          {
+            "id": "deepseek-v4-pro",
+            "name": "DeepSeek V4 Pro",
+            "reasoning": true,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 1.74,
+              "output": 3.48,
+              "cacheRead": 0.145,
+              "cacheWrite": 0
+            },
+            "contextWindow": 1000000,
+            "maxTokens": 384000,
+            "compat": {
+              "supportsReasoningEffort": true,
+              "supportsUsageInStreaming": true,
+              "maxTokensField": "max_tokens"
+            },
+            "api": "openai-completions"
+          },
+          {
+            "id": "deepseek-chat",
+            "name": "DeepSeek Chat",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0.28,
+              "output": 0.42,
+              "cacheRead": 0.028,
+              "cacheWrite": 0
+            },
+            "contextWindow": 131072,
+            "maxTokens": 8192,
+            "compat": {
+              "supportsUsageInStreaming": true,
+              "maxTokensField": "max_tokens"
+            },
+            "api": "openai-completions"
+          },
+          {
+            "id": "deepseek-reasoner",
+            "name": "DeepSeek Reasoner",
+            "reasoning": true,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0.28,
+              "output": 0.42,
+              "cacheRead": 0.028,
+              "cacheWrite": 0
+            },
+            "contextWindow": 131072,
+            "maxTokens": 65536,
+            "compat": {
+              "supportsReasoningEffort": false,
+              "supportsUsageInStreaming": true,
+              "maxTokensField": "max_tokens"
+            },
+            "api": "openai-completions"
+          }
+        ]
+      },
+      "stepfun": {
+        "baseUrl": "https://api.stepfun.ai/step_plan/v1",
+        "auth": "api-key",
+        "api": "openai-completions",
+        "timeoutSeconds": 180,
+        "models": [
+          {
+            "id": "step-3.7-flash",
+            "name": "StepFun Step 3.7 Flash",
+            "api": "openai-completions",
+            "input": [
+              "text"
+            ]
+          },
+          {
+            "id": "step-3.5-flash",
+            "name": "StepFun Step 3.5 Flash",
+            "api": "openai-completions",
+            "input": [
+              "text"
+            ]
+          },
+          {
+            "id": "step-3.5-flash-2603",
+            "name": "StepFun Step 3.5 Flash 2603",
+            "api": "openai-completions",
+            "input": [
+              "text"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "cron": {
+    "enabled": true
+  },
+  "secrets": {
+    "providers": {
+      "stepfun": {
+        "source": "env",
+        "allowlist": [
+          "STEPFUN_API_KEY"
+        ]
+      }
+    }
+  },
+  "messages": {
+    "tts": {
+      "enabled": false
+    }
+  }
+}
