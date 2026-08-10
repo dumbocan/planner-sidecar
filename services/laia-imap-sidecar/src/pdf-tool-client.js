@@ -1,11 +1,11 @@
 // Internal MCP client for the PDF tool sidecar. The IMAP sidecar acts as an
-// MCP client (to pdf-tool-sidecar) while remaining an MCP server itself (to the
+// MCP client (to pdf-tool v2) while remaining an MCP server itself (to the
 // gateway). This client manages the StreamableHTTP session lifecycle lazily:
 // the first extract() call initializes a session and caches the mcp-session-id
 // header for reuse on subsequent calls. If a tools/call receives a 404
 // (session expired), it re-initializes and retries once.
 
-const DEFAULT_URL = "http://pdf-tool-sidecar:3000/mcp";
+const DEFAULT_URL = "http://pdf-tool:3000/mcp";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const PDF_TOOL_TIMEOUT_MS = 30_000;
 const MAX_TOOL_CALL_ATTEMPTS = 2;
