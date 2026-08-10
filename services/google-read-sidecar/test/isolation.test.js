@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const composePath = new URL('../../../docker-compose.yml', import.meta.url);
+const composePath = new URL('../../../docker-compose2.yml', import.meta.url);
 
 test('only the Google sidecar receives the OAuth secret mount', async () => {
   const compose = await readFile(composePath, 'utf8');
@@ -24,6 +24,7 @@ test('the sidecar is not published on a host port and is filtered to read tools'
   assert.deepEqual(config.mcp.servers['google-read'].toolFilter.include, [
     'gmail_search',
     'gmail_get_sanitized',
+    'gmail_extract_pdf_attachment',
     'calendar_freebusy',
     'calendar_list_events',
     'calendar_create_event',
