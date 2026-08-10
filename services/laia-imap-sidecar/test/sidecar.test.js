@@ -16,7 +16,7 @@ import {
 } from '../src/tools.js';
 import { ImapIntake, isTransientImapError, readBootstrapDays, selectSyncMailboxes } from '../src/imap-client.js';
 
-const composePath = new URL('../../../docker-compose.yml', import.meta.url);
+const composePath = new URL('../../../docker-compose2.yml', import.meta.url);
 const configPath = new URL('../../../state/openclaw.json', import.meta.url);
 
 test('exports only the approved bounded read-only mail tools', () => {
@@ -973,7 +973,7 @@ test('ImapIntake.searchMailbox rejects malformed inputs before opening a connect
 
 test('mail_search_in_mailbox never references IMAP TEXT, BODY, or fetchOne source in source', async () => {
   const source = await readFile(new URL('../src/imap-client.js', import.meta.url), 'utf8');
-  const match = source.match(/async collectMailboxCandidates\([\s\S]*?\n  \}/);
+  const match = source.match(/async collectMailboxCandidates\([\s\S]*?\n {2}\}/);
   assert.ok(match, 'collectMailboxCandidates method must be present');
   const section = match[0];
   assert.equal(/\btext\s*:/.test(section), false, 'IMAP search must not receive text:');
@@ -1661,12 +1661,12 @@ test('extractPdfInFolder facade throws when intake is not configured', async () 
 test('extractPdfInFolder the IMAP source must not reference message source or fixed literal sizes for attachment parts', async () => {
   const source = await readFile(new URL('../src/imap-client.js', import.meta.url), 'utf8');
   // fetchAttachmentPart must use bodyParts, not source
-  const section = source.match(/async fetchAttachmentPart\([\s\B]*?\n  \}/);
+  const section = source.match(/async fetchAttachmentPart\([\sB]*?\n {2}\}/);
   if (section) {
     assert.equal(/\bsource\s*:/.test(section[0]), false, 'fetchAttachmentPart must not use source:');
   }
   // listAttachmentsInFolder must use bodyStructure
-  const listSection = source.match(/async listAttachmentsInFolder\([\s\B]*?\n  \}/);
+  const listSection = source.match(/async listAttachmentsInFolder\([\sB]*?\n {2}\}/);
   if (listSection) {
     assert.equal(/\bbodyStructure\s*:/.test(listSection[0]), true, 'listAttachmentsInFolder must use bodyStructure:');
   }
