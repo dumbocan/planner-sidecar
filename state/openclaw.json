@@ -126,7 +126,8 @@
       "isolated-engram__mem_search",
       "exec",
       "tool_search",
-      "message"
+      "message",
+      "outlook-mail__outlook_search_extract_pdf"
     ],
     "deny": [
       "group:web",
@@ -273,7 +274,8 @@
             "outlook_search_messages",
             "outlook_get_sanitized_message",
             "outlook_list_pdf_attachments",
-            "outlook_extract_pdf_attachment"
+            "outlook_extract_pdf_attachment",
+            "outlook_search_extract_pdf"
           ]
         },
         "codex": {
@@ -482,7 +484,8 @@
               "web_fetch",
               "web_search",
               "browser",
-              "message"
+              "message",
+              "outlook-mail__outlook_search_extract_pdf"
             ],
             "deny": [
               "calendar.add",

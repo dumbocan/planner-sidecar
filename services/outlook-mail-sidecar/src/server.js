@@ -235,7 +235,29 @@ function createMcpServer() {
       }
     },
   );
-  return server;
+      server.registerTool(
+        "outlook_search_extract_pdf",
+        {
+          description:
+            "Search Outlook messages by query, find the most recent message with a PDF attachment, and return the extracted PDF text in one call. Requires confirm:true. Manual-only; never auto-runs based on sender or content. Removes the need to copy opaque Graph messageId/attachmentId between tools. Returns the message and attachment identifiers plus the extracted text for follow-up.",
+          inputSchema: z.object({
+            folderId,
+            query: z.string().min(1).max(500),
+            limit: z.number().int().min(1).max(50).optional(),
+            confirm: z.literal(true),
+            maxChars: z.number().int().min(1).max(80000).optional(),
+            maxPages: z.number().int().min(1).max(200).optional(),
+          }),
+        },
+        async (input) => {
+          try {
+            return result(await (await getTools()).searchExtractPdf(input));
+          } catch (error) {
+            return failure("outlook_search_extract_pdf", error);
+          }
+        },
+      );
+      return server;
 }
 
 const server = createServer(async (request, response) => {

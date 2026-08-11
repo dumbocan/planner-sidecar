@@ -16,6 +16,7 @@ test("exposes the Outlook read-only and manual-PDF tool inventory", () => {
     "outlook_list_pdf_attachments",
     "outlook_extract_pdf_attachment",
     "outlook_save_pdf_attachment",
+    "outlook_search_extract_pdf",
   ]);
   // No write/mutation tool may live in the inventory. PDF reads are still
   // strictly manual-only: there is no auto-download or batch tool.
@@ -538,3 +539,89 @@ test("extractPdfAttachment surfaces structured invoiceFields while keeping globa
   assert.doesNotMatch(result.text, /\+34/);
   assert.doesNotMatch(result.text, /example\.com/);
 });
+    test("searchExtractPdf extracts the newest matching PDF in one call without the model re-typing IDs", async () => {
+      const calls = { list: [], attach: [] };
+      const graph = {
+        listMessages: async (input) => {
+          calls.list.push(input);
+          return [
+            { id: "msg-no-pdf", subject: "Sin adjunto" },
+            { id: "msg-mercadona", subject: "Factura Mercadona agosto" },
+          ];
+        },
+        listMessageAttachments: async (messageId) => {
+          calls.attach.push(messageId);
+          if (messageId === "msg-no-pdf") {
+            return [
+              {
+                id: "att-txt",
+                name: "nota.txt",
+                contentType: "text/plain",
+                size: 10,
+                "@odata.type": "#microsoft.graph.fileAttachment",
+              },
+            ];
+          }
+          return [
+            {
+              id: "att-mercadona",
+              name: "A-G2026-412202.pdf",
+              contentType: "application/pdf",
+              size: 2048,
+              "@odata.type": "#microsoft.graph.fileAttachment",
+            },
+          ];
+        },
+        getAttachmentMetadata: async () => ({
+          id: "att-mercadona",
+          name: "A-G2026-412202.pdf",
+          contentType: "application/pdf",
+          size: 2048,
+          "@odata.type": "#microsoft.graph.fileAttachment",
+        }),
+        getAttachmentRawContent: async () => Buffer.from("%PDF-1.4 fake invoice bytes"),
+      };
+      const pdfToolClient = stubPdfToolClient(async () => ({
+        text: "Mercadona invoice [EMAIL] total 123.69",
+        pages: 1,
+        truncated: false,
+        invoiceFields: { invoiceNumber: "A-G2026-412202", totals: { total: "123.69" } },
+      }));
+      const tools = createReadTools(graph, { pdfToolClient });
+      const result = await tools.searchExtractPdf({ query: "from:mercadona", confirm: true });
+      // Search hits Graph once with the bounded query, then scans each message in
+      // order until the first PDF-bearing message.
+      assert.equal(calls.list[0].query, "from:mercadona");
+      assert.deepEqual(calls.attach, ["msg-no-pdf", "msg-mercadona"]);
+      assert.equal(result.messageId, "msg-mercadona");
+      assert.equal(result.attachmentId, "att-mercadona");
+      assert.equal(result.attachmentName, "A-G2026-412202.pdf");
+      assert.equal(result.messageSubject, "Factura Mercadona agosto");
+      assert.match(result.text, /Mercadona invoice/);
+      assert.equal(result.invoiceFields.invoiceNumber, "A-G2026-412202");
+      assert.match(result.trustBoundary, /untrusted/i);
+    });
+
+    test("searchExtractPdf requires confirm:true and a query, and bounds the scan", async () => {
+      const tools = createReadTools(
+        { listMessages: async () => [], listMessageAttachments: async () => [] },
+        { pdfToolClient: stubPdfToolClient() },
+      );
+      await assert.rejects(() => tools.searchExtractPdf({ query: "x" }), /confirm:true/);
+      await assert.rejects(() => tools.searchExtractPdf({ confirm: true }), /query is required/);
+    });
+
+    test("searchExtractPdf reports when no scanned message carries a PDF", async () => {
+      const graph = {
+        listMessages: async () => [
+          { id: "m1", subject: "S1" },
+          { id: "m2", subject: "S2" },
+        ],
+        listMessageAttachments: async () => [],
+      };
+      const tools = createReadTools(graph, { pdfToolClient: stubPdfToolClient() });
+      await assert.rejects(
+        () => tools.searchExtractPdf({ query: "mercadona", confirm: true }),
+        /No PDF attachment found/,
+      );
+    });
