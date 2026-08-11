@@ -40,7 +40,7 @@ test('requires TLS validation and read-only IMAP configuration', () => {
   assert.equal(options.secure, true);
   assert.equal(options.tls.rejectUnauthorized, true);
   assert.equal(options.disableAutoEnable, true);
-  assert.equal(options.maxLiteralSize, 64 * 1024);
+  assert.equal(options.maxLiteralSize, 16 * 1024 * 1024);
   assert.equal(options.qresync, false);
   assert.equal(Object.hasOwn(options, 'smtp'), false);
 });
@@ -255,7 +255,7 @@ test('polls only post-bootstrap UIDs after the seeded cursor', async () => {
     mailbox: { uidValidity: 9, uidNext: 10 },
     async getMailboxLock() { return { release() {} }; },
     async search(query) { searches.push(query); return [9]; },
-    async fetchOne(uid, query) {
+    async fetchOne(_uid, query) {
       if (query.envelope) {
         return { envelope: { messageId: '<new@example.test>', subject: 'New', from: [{ address: 'sender@example.test' }] } };
       }
@@ -1670,4 +1670,36 @@ test('extractPdfInFolder the IMAP source must not reference message source or fi
   if (listSection) {
     assert.equal(/\bbodyStructure\s*:/.test(listSection[0]), true, 'listAttachmentsInFolder must use bodyStructure:');
   }
+});
+
+
+test('fetchAttachmentPart decodes base64-encoded body parts', async () => {
+  const pdfBytes = Buffer.from('%PDF-1.4 base64 mock pdf data here');
+  const encoded = pdfBytes.toString('base64');
+  const intake = mockAttachmentClient({
+    list: () => [{ path: 'INBOX.Facturas', name: 'Facturas' }],
+    fetchOne(_uid, _query) {
+      return {
+        bodyStructure: {
+          childNodes: [
+            {
+              part: '2',
+              type: 'application/pdf',
+              size: encoded.length,
+              encoding: 'base64',
+              disposition: 'attachment',
+              dispositionParameters: { filename: 'VF2939_26.pdf' },
+            },
+          ],
+        },
+        bodyParts: new Map([['2', Buffer.from(encoded)]]),
+      };
+    },
+  });
+  const result = await intake.fetchAttachmentPart({
+    folder: 'INBOX.Facturas',
+    uid: 346,
+    part: '2',
+  });
+  assert.equal(result.data.toString(), pdfBytes.toString());
 });

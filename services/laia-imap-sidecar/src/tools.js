@@ -145,7 +145,9 @@ export function createReadOnlyImapClientOptions(credentials) {
     disableAutoEnable: true,
     qresync: false,
     disableAutoIdle: true,
-    maxLiteralSize: 64 * 1024,
+    // Real invoices are 300-500KB; the extraction pipeline caps at 12MB,
+    // so accept literals up to 16MB instead of crashing on 64KB.
+    maxLiteralSize: 16 * 1024 * 1024,
     maxLineLength: 64 * 1024,
     connectionTimeout: 10_000,
     greetingTimeout: 10_000,
