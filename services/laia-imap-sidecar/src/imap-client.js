@@ -41,7 +41,20 @@ const NETWORK_ERROR_CODES = new Set([
 ]);
 const TRANSIENT_IMAP_PATTERN = /too.?many|rate.?limit|throttl|try.?again|temporar|overload|service.?unavailab/i;
 const MAX_ATTACHMENT_LIST = 20;
-const MAX_PDF_SIZE_BYTES = 50 * 1024 * 1024;
+
+// imapflow returns raw part bytes with the original Content-Transfer-Encoding.
+// Decode base64/quoted-printable so the %PDF- magic check sees real bytes.
+function decodeQuotedPrintable(buffer) {
+  const text = buffer.toString('latin1');
+  const unescaped = text.replace(/=([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+  return Buffer.from(unescaped.replace(/=\r?\n/g, ''), 'latin1');
+}
+function decodePartEncoding(buffer, encoding) {
+  const enc = typeof encoding === 'string' ? encoding.toLowerCase() : null;
+  if (enc === 'base64') return Buffer.from(buffer.toString('latin1'), 'base64');
+  if (enc === 'quoted-printable') return decodeQuotedPrintable(buffer);
+  return buffer;
+}
 
 export function isTransientImapError(error) {
   if (!error) return false;
@@ -248,6 +261,7 @@ export class ImapIntake {
       size: Number.isFinite(node.size) ? node.size : null,
       filename,
       disposition: String(node.disposition ?? 'inline').toLowerCase(),
+      encoding: typeof node.encoding === 'string' ? node.encoding.toLowerCase() : null,
       isPdf,
     });
 
@@ -338,12 +352,17 @@ export class ImapIntake {
           throw new Error(`body part "${part}" is empty`);
         }
 
+        // imapflow returns the raw part bytes with the original
+        // Content-Transfer-Encoding. Real invoices are base64-encoded, so the
+        // %PDF- magic check below would fail on the encoded text; decode here.
+        const decoded = decodePartEncoding(buffer, match?.encoding);
+
         return {
           part,
           type: match.type,
           filename: match.filename,
-          size: buffer.length,
-          data: buffer,
+          size: decoded.length,
+          data: decoded,
         };
       } finally {
         lock?.release();
