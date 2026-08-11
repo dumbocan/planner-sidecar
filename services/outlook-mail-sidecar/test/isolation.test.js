@@ -30,6 +30,7 @@ test("OpenClaw registers the read-only Outlook tools for main", async () => {
     "outlook_get_sanitized_message",
     "outlook_list_pdf_attachments",
     "outlook_extract_pdf_attachment",
+    "outlook_search_extract_pdf",
   ];
   const expectedPolicyNames = expectedTools.map((name) => `outlook-mail__${name}`);
   assert.deepEqual(config.mcp.servers["outlook-mail"].toolFilter.include, expectedTools);
