@@ -1,5 +1,10 @@
 # Next Session
 
+## Gentle-AI Docker deploy upgraded 2.1.11 → 2.3.0 (2026-08-13)
+
+- Deploy sources (`docker/gentle-ai/*`, `workspace/docker/gentle-ai/Dockerfile`, `docker-compose2.yml` tag, `docs/internal/vps-migration.md`) updated to official Gentle-AI **v2.3.0** with verified checksums; artifact downloaded and checksum-verified.
+- Gateway rebuilt and recreated (`openclaw-gentle-ai:2.3.0`): container healthy, `gentle-ai --version` inside reports 2.3.0, sidecars untouched.
+
 ## Calendar + audio transcription both FIXED (2026-08-03) — closed
 
 - **Google-read calendar**: BOTH refresh tokens had been revoked by Google (`invalid_grant`) — re-authed laia (`token.json`) and personal (`gmail-dumbo-cata-token.json`) via PKCE loopback, sidecar recreated with `--force-recreate`, MCP verified for both accounts, cron `14babf87` runs clean (ok, delivered, 0 consecutive errors).
@@ -12,12 +17,14 @@
 Javier's vision: a "virtual secretary" agent (Laia) with its own workspace, isolated credentials, and a focused tool surface — to keep his personal Google accounts separate from the agent's actions ("if they hack her, they don't hack me").
 
 What we have today (NOT aligned with the vision):
+
 - Single `main` agent in OpenClaw
 - Two Google accounts wired into the sidecar (both owned by Javier: `laijmelectronautica@gmail.com`, `dumbo.cata@gmail.com`)
 - Token-based isolation only at scopes layer, not at credentials layer
 - All tools exposed to the main session, no per-agent allowlists active
 
 What OpenClaw natively supports (discovered 2026-07-26):
+
 - `openclaw agents add` creates **isolated agents** with their own workspaces, auth routing, and tool allowlists
 - `isolated-engram` MCP is already referenced in `state/openclaw.json` but the agent surface is not yet built
 - WhatsApp is a built-in channel (no separate sidecar needed for the user's planned WhatsApp integration)
@@ -26,6 +33,7 @@ What OpenClaw natively supports (discovered 2026-07-26):
 Three options for the next session (Javier hasn't picked):
 
 **Option A — Build the isolated "secretaria" agent** (recommended if Javier wants the isolation model)
+
 - `openclaw agents add laia-secretaria --workspace ~/.openclaw/laia --channel telegram --account laia`
 - Configure per-agent allowlist (only calendar/contacts tools; NO gmail to start)
 - Configure per-agent Engram (already has the `isolated-engram` MCP stub)
@@ -33,12 +41,14 @@ Three options for the next session (Javier hasn't picked):
 - Sidecar stays shared but per-agent routing ensures Laia's tokens never reach Javier's session
 
 **Option B — Consolidate to one account** (recommended if Javier doesn't actually need cross-account isolation)
+
 - Update the sidecar to remove slot=laia; everything happens on `dumbo.cata@gmail.com`
 - Delete the `laijmelectronautica@gmail.com` token and its secrets directory (optional)
 - Loses: calendar intercalary, separate agent identity
 - Gains: one less surface, simpler config
 
 **Option C — Keep current setup + add docs explaining the model**
+
 - Accept that both accounts are Javier's, document the shared-ownership model
 - Skip the isolated-agent pattern for now (can add later if needed)
 - Spend time on other gaps (WhatsApp real use, Planner retest, IMAP digest review)
@@ -111,6 +121,7 @@ Reopen with: ask Javier which option (A/B/C) he wants before touching code. Defa
 - Start a new Telegram session with `/new`; existing Codex threads keep their previous app set.
 - Use the safe catalog-only retest prompt recorded in the incident handoff before any bounded IMAP query.
 - Do not re-enable `codexPlugins` or add direct email-provider app tools. Company email must continue through `laia-imap-sidecar` only.
+
 ## Laia IMAP bootstrap follow-up
 
 - The sidecar now starts routine digest intake at a 30-day first-sync boundary and has a fresh local cursor/state cache.

@@ -9,12 +9,12 @@ COPY artifacts/ /artifacts/
 
 RUN case "${TARGETOS}/${TARGETARCH}" in \
       linux/amd64) \
-        archive="gentle-ai_2.1.11_linux_amd64.tar.gz"; \
-        checksum="d115aaf5724a71503150ebf740769e7aa52e41e673ac39bf5b0ff1be4e3324b0"; \
+        archive="gentle-ai_2.3.0_linux_amd64.tar.gz"; \
+        checksum="899d3382c39c4095d7830def523e27a78aa94c410e63e36a7aa702a186f43f99"; \
         ;; \
       linux/arm64) \
-        archive="gentle-ai_2.1.11_linux_arm64.tar.gz"; \
-        checksum="aea3a4b0064b57df5f831fdf6b27b29e9898a8f9393fd648dea4a8ba563e477e"; \
+        archive="gentle-ai_2.3.0_linux_arm64.tar.gz"; \
+        checksum="d3385c41094b7a53cc4d96132b86822bcacd0cd06bb5b58ab2a592c45bb827d8"; \
         ;; \
       *) \
         echo "unsupported Gentle-AI platform: ${TARGETOS}/${TARGETARCH}" >&2; \

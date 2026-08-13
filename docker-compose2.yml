@@ -1,5 +1,5 @@
 x-openclaw-gentle-ai: &openclaw-gentle-ai
-  image: openclaw-gentle-ai:2.1.11
+  image: openclaw-gentle-ai:2.3.0
   build:
     context: ./docker/gentle-ai
 

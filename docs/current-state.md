@@ -1,5 +1,12 @@
 # Current State
 
+## 2026-08-13 - Gentle-AI Docker deploy upgraded 2.1.11 → 2.3.0
+
+- `docker/gentle-ai/download-release.sh`, `docker/gentle-ai/Dockerfile` and `workspace/docker/gentle-ai/Dockerfile` now pin the official Gentle-AI **v2.3.0** release (was 2.1.11) with fresh SHA-256 checksums from the release `checksums.txt` (amd64 `899d3382…`, arm64 `d3385c41…`).
+- `docker-compose2.yml` image tag bumped to `openclaw-gentle-ai:2.3.0`.
+- Downloaded artifact `gentle-ai_2.3.0_linux_amd64.tar.gz` verified (`sha256sum` OK) and the 2.1.11 tarball removed; extracted binary reports `gentle-ai 2.3.0`.
+- Gateway image rebuilt and recreated (`openclaw-gentle-ai:2.3.0`); container **healthy** and `gentle-ai --version` inside reports 2.3.0. Sidecars untouched.
+
 ## 2026-08-03 - Audio transcription FIXED: local faster-whisper in gateway container
 
 - **Problem**: Voice notes in Telegram arrived as audio but produced no transcript. Laia's diagnosis (whisper-cli not installed, no internet, no pip) was WRONG — the gateway container has internet; the real issue was `tools.media.audio` pointing at `provider: "openai"` with `gpt-4o-transcribe` but NO OpenAI credential anywhere (doctor: `openai-whisper-api is allowed but unavailable: env: OPENAI_API_KEY`).
@@ -177,6 +184,7 @@
 - Approved email access remains limited to the three `laia-imap` read-only MCP tools. Google read MCP and isolated Engram MCP remain configured.
 - The gateway was recreated and is healthy; Google and IMAP sidecars were not restarted.
 - The audited incident transcript executed only Hostinger read/list calls with HTTP GET; no email write, delete, send, move, flag, or SMTP tool call was executed.
+
 # 2026-07-21 — Laia IMAP 30-day bootstrap window applied locally
 
 - Added `IMAP_BOOTSTRAP_DAYS` with a default of 30 and strict 1–365 integer validation to the isolated read-only IMAP sidecar.
