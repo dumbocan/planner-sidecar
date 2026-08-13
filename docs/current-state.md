@@ -1,5 +1,15 @@
 # Current State
 
+## 2026-08-13 - Gateway incident repair (pdf-tool DNS, config, orphan transcripts)
+
+- **pdf-tool EAI_AGAIN (root cause)**: docker-compose2.yml declared `pdf-mcp-internal` on the sidecars but NOT on `openclaw-gateway`; the recreate during the gentle-ai 2.3.0 upgrade dropped the gateway from the pdf network, so the gateway could not resolve `pdf-tool`. Fixed by adding `pdf-mcp-internal` to the gateway `networks:` + gateway recreate. Verified: gateway resolves pdf-tool (172.29.0.3), MCP endpoint responds, doctor shows no EAI_AGAIN.
+- **Config permissions**: `state/openclaw.json` was 664 (group/world readable) -> chmod 600.
+- **Legacy TTS key**: doctor --fix migrated `messages.tts.enabled` -> `messages.tts.auto` (off).
+- **Sessions without transcripts**: `openclaw sessions cleanup --fix-missing` pruned 5 orphan cron sessions (triage-correo, resumen-correo, resumen-agenda, Memory Dreaming); 5 real sessions kept.
+- **99 orphan transcript files**: archived (renamed to `*.deleted.20260813-*`) in `state/agents/main/sessions/`; 5 active transcripts remain. Reversible.
+- **LAN exposure**: `OPENCLAW_DISABLE_BONJOUR=1` set in `.env` (bind stays `lan` — required for internal sidecar MCP); gateway recreated.
+- **Remaining minor warnings**: `tools.allow` unknown entry `tool_search`; bootstrap AGENTS.md/TOOLS.md truncated (48%/58%) — not blocking.
+
 ## 2026-08-13 - Gentle-AI Docker deploy upgraded 2.1.11 → 2.3.0
 
 - `docker/gentle-ai/download-release.sh`, `docker/gentle-ai/Dockerfile` and `workspace/docker/gentle-ai/Dockerfile` now pin the official Gentle-AI **v2.3.0** release (was 2.1.11) with fresh SHA-256 checksums from the release `checksums.txt` (amd64 `899d3382…`, arm64 `d3385c41…`).

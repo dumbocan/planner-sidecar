@@ -97,6 +97,7 @@ services:
       - default
       - google-mcp-internal
       - imap-mcp-internal
+      - pdf-mcp-internal
       - planner-mcp-internal
       - outlook-mcp-internal
 

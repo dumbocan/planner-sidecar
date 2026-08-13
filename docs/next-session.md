@@ -1,5 +1,11 @@
 # Next Session
 
+## Gateway incident repair (2026-08-13) — closed
+
+- pdf-tool EAI_AGAIN fixed: gateway was missing `pdf-mcp-internal` network in docker-compose2.yml (only sidecars had it); added + recreated. Now resolves and MCP responds.
+- Config chmod 600, TTS legacy key migrated (doctor --fix), 5 orphan cron sessions pruned, 99 orphan transcripts archived (reversible rename), bonjour disabled (.env).
+- **Pending minor**: tools.allow `tool_search` unknown-entry warning; bootstrap files truncated. Optionally commit the compose network fix.
+
 ## Gentle-AI Docker deploy upgraded 2.1.11 → 2.3.0 (2026-08-13)
 
 - Deploy sources (`docker/gentle-ai/*`, `workspace/docker/gentle-ai/Dockerfile`, `docker-compose2.yml` tag, `docs/internal/vps-migration.md`) updated to official Gentle-AI **v2.3.0** with verified checksums; artifact downloaded and checksum-verified.
