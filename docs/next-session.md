@@ -1,5 +1,15 @@
 # Next Session
 
+## Gentle-AI Docker deploy upgraded 2.3.0 → 4.2.0 (2026-10-18)
+
+- Deploy sources pin Gentle-AI **v4.2.0** (amd64 `552c1642…`, arm64 `2bebe91b…`) and the OpenClaw base moved to `@sha256:614004ec…` = **OpenClaw 2026.10.4** (node 24.21.0, up from 2026.7.1 / node 22). The `gga` npm layer was removed (it was never on `PATH` and nothing references it).
+- Gateway recreated with `openclaw-gentle-ai:4.2.0`: healthy, `gentle-ai 4.2.0`, 7 MCP servers listed, Telegram OK, sidecars untouched.
+- OpenClaw auto-migrated `state/openclaw.json` on first boot (mcp timeouts → `connectionTimeoutMs`/`requestTimeoutMs`, `messages.tts` → `tts`, `env.*` → `env.vars.*`, model map → `modelPolicy.allow`). Backups: `state/openclaw.json.bak*`.
+- Model policy fixed in the same session: `agents.defaults.modelPolicy.allow` now covers `openai/gpt-6.1-sol` / `gpt-6-sol` / `gpt-6-luna` / `gpt-5.6-sol`; the dead `openai/gpt-5.5` was removed (it was both fallback#2 and the `Inteligente` alias). Aliases `Sol` and `Luna` added; primary still `stepfun/step-3.7-flash`. Verified live with `openclaw agent --model`, and an out-of-list model is still rejected.
+- Isolated Engram upgraded 1.20.0 → 3.4.0 (bind-mounted binary, not part of the image): backup `engram/data.bak-20261018-142204/`, old binary `engram/bin/engram.1.20.0.bak`, migration 22 → 28 tables with 304/304 observations preserved, MCP probe OK (2 tools), cloud sync verified. Volume cleanup: 20 → 12 volumes, 4.83 GB → 381 MB (Penpot data and the Mayan volumes kept on purpose). `doctor` no longer flags `models.providers`.
+- **Pending**: reload the browser Control UI (old build → `control-ui-build-mismatch`); optionally decide on the three Penpot volumes (~176 MB of real design data); commit the deploy diff (compose tag + `docker/gentle-ai/*` + docs + `state/openclaw.json`) only when Javier asks.
+- **Watch**: image grew to 5.03 GB after the base bump; `openclaw doctor` still lists `models.providers` compat overrides as legacy — intentionally left so the stepfun/deepseek provider compat is not silently rewritten.
+
 ## Gateway incident repair (2026-08-13) — closed
 
 - pdf-tool EAI_AGAIN fixed: gateway was missing `pdf-mcp-internal` network in docker-compose2.yml (only sidecars had it); added + recreated. Now resolves and MCP responds.
