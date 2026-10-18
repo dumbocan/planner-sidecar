@@ -313,3 +313,6 @@ extensions/discord/assets/embedded-app-sdk.mjs
 
 # CodeGraph local index (binary SQLite DB, can reach GBs — must never enter git diffs)
 .codegraph/
+
+# Runtime state; must not live in a public repository.
+state/openclaw.json
