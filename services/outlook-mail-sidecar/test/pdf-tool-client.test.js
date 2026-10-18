@@ -248,7 +248,7 @@ test("extract accepts a JSON content-type response (non-SSE fallback)", async ()
         result: {
           protocolVersion: "2024-11-05",
           capabilities: {},
-          serverInfo: { name: "pdf-tool-sidecar", version: "0.1.0" },
+          serverInfo: { name: "pdf-tool", version: "0.1.0" },
         },
       }, "sess-json");
     }

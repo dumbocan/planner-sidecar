@@ -19,6 +19,12 @@ function truncate(value, maxChars = MAX_TEXT_CHARS) {
   return `${text.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
 }
 
+export function truncateTextOnly(value, maxChars = MAX_TEXT_CHARS) {
+  // Pure truncation: no PII redaction. Use for already-trusted PDF text
+  // where redacting digits would corrupt structured line items.
+  return truncate(value, maxChars);
+}
+
 export function sanitizeText(value, { maxChars = MAX_TEXT_CHARS } = {}) {
   let text = String(value ?? "");
   text = text

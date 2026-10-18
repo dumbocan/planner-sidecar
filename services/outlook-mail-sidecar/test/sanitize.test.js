@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   sanitizeMessage,
   sanitizeText,
+  truncateTextOnly,
   MAX_MESSAGE_TEXT_CHARS,
   MAX_TOOL_PAYLOAD_BYTES,
 } from "../src/sanitize.js";
@@ -78,4 +79,25 @@ test("enforces total sanitized output cap including untrusted metadata such as r
     !encoded.includes(hostileMetadata),
     "hostile metadata must not survive into the encoded payload",
   );
+});
+
+test("truncateTextOnly truncates without redacting PDF content", () => {
+  const pdfLike =
+    "ATÚN CLARO GIRAS PK8472227109,0000 4,0000 EX 0,0000 4,0000 " +
+    "LECHE DESN P9123456789,1000 5,1000 EX 0,0000 5,1000";
+  const result = truncateTextOnly(pdfLike, 200);
+  assert.ok(!result.includes("[PHONE]"), "pdf text must not be redacted as [PHONE]");
+  assert.ok(!result.includes("[EMAIL]"), "pdf text must not be redacted as [EMAIL]");
+  assert.ok(!result.includes("[URL]"), "pdf text must not be redacted as [URL]");
+  assert.ok(result.includes("ATÚN CLARO GIRAS PK8472227109,0000"));
+  assert.ok(result.includes("LECHE DESN P9123456789,1000"));
+});
+
+
+test("sanitizeText still redacts for email metadata", () => {
+  const result = sanitizeText(
+    "ATÚN CLARO GIRAS PK8472227109,0000 +34 612 345 678",
+    { maxChars: 200 },
+  );
+  assert.ok(result.includes("[PHONE]"), "email text must still redact phones");
 });
