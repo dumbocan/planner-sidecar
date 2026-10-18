@@ -298,10 +298,14 @@ services:
       - /tmp:rw,noexec,nosuid,size=64m
     volumes:
       - "./outlook-state:/var/lib/outlook-mail"
+      # Needs to land downloads where ingest_mercadona.py reads them. Scope the
+      # mount to the mercadona subdirectory so the sidecar can write nowhere else.
+      - "./workspace/mercadona:/home/node/.openclaw/workspace/mercadona"
     environment:
       PORT: "3000"
       OUTLOOK_CLIENT_ID: "${OUTLOOK_CLIENT_ID:-}"
       OUTLOOK_STATE_DIR: /var/lib/outlook-mail
+      OUTLOOK_WORKSPACE_ROOT: /home/node/.openclaw/workspace
       PDF_TOOL_URL: "http://pdf-tool:3000/mcp"
     cap_drop:
       - ALL
