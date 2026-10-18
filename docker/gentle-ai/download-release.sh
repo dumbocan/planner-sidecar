@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly RELEASE_BASE_URL="https://github.com/Gentleman-Programming/gentle-ai/releases/download/v2.3.0"
+readonly RELEASE_BASE_URL="https://github.com/Gentleman-Programming/gentle-ai/releases/download/v4.2.0"
 readonly ARTIFACT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/artifacts"
 
 case "$(uname -m)" in
   x86_64|amd64)
-    archive="gentle-ai_2.3.0_linux_amd64.tar.gz"
-    checksum="899d3382c39c4095d7830def523e27a78aa94c410e63e36a7aa702a186f43f99"
+    archive="gentle-ai_4.2.0_linux_amd64.tar.gz"
+    checksum="552c1642fd10f5d96cfe9bb1cc3b66b30eb47d3074cc7ca0559b598eb086defc"
     ;;
   aarch64|arm64)
-    archive="gentle-ai_2.3.0_linux_arm64.tar.gz"
-    checksum="d3385c41094b7a53cc4d96132b86822bcacd0cd06bb5b58ab2a592c45bb827d8"
+    archive="gentle-ai_4.2.0_linux_arm64.tar.gz"
+    checksum="2bebe91b8808ce48d86c4d3700d098e37cb6b0658f196c666d9deeeb7c7c1a7a"
     ;;
   *)
     printf 'unsupported native architecture: %s\n' "$(uname -m)" >&2
