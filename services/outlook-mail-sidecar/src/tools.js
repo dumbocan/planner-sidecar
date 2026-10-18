@@ -1,6 +1,6 @@
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { boundPayload, sanitizeMessage, sanitizeText, truncateTextOnly } from "./sanitize.js";
+import { boundPayload, sanitizeMessage, sanitizeText } from "./sanitize.js";
 
 export const OUTLOOK_TOOL_NAMES = [
 	"outlook_list_folders",
@@ -203,12 +203,12 @@ function sanitizeFilename(name) {
 }
 
 function truncatePdfText(text, maxChars) {
-  // PDF text is trusted structured extraction from an authorized attachment.
-  // Truncate only — do NOT apply PII redaction here, because redacting
-  // digits inside product-line tables corrupts unit prices, bases, taxes
-  // and totals. Email-side sanitization stays in sanitizeText(); this path
-  // is invoice-safe by design.
-  const trimmed = truncateTextOnly(text, maxChars);
+  // PDF text is a structured extraction from an authorized attachment. Keep
+  // every digit: masking phone-shaped runs corrupts invoice numbers, hours,
+  // quantities and product codes (PK6, ALCOHOL 96). Emails and URLs stay
+  // redacted so the untrusted output exposes no contactable or clickable
+  // surface. Email-body sanitization keeps full phone masking.
+  const trimmed = sanitizeText(text, { maxChars, maskPhones: false });
   return {
     text: trimmed,
     truncated: trimmed.length >= maxChars,

@@ -612,14 +612,18 @@ test("extractPdfAttachment surfaces structured invoiceFields while keeping globa
 	assert.equal(result.invoiceFields.untrusted, true);
 	// Trust boundary now mentions invoice fields explicitly.
 	assert.match(result.trustBoundary, /invoice fields/i);
-	// Global PII redaction is NOT weakened: emails, phones and URLs from the
-	// free text are still redacted before the result is returned.
+	// Emails and URLs from the free text are still redacted, so the result
+	// exposes no contactable or clickable surface.
 	assert.match(result.text, /\[EMAIL\]/);
-	assert.match(result.text, /\[PHONE\]/);
 	assert.match(result.text, /\[URL\]/);
 	assert.doesNotMatch(result.text, /billing@example\.com/);
-	assert.doesNotMatch(result.text, /\+34/);
 	assert.doesNotMatch(result.text, /example\.com/);
+	// Digits are preserved on the PDF path: masking phone-shaped runs is what
+	// corrupted invoice numbers and product codes, so a phone-looking sequence
+	// inside an invoice survives by design.
+	assert.doesNotMatch(result.text, /\[PHONE\]/);
+	assert.match(result.text, /\+34 600 123 456/);
+	assert.match(result.text, /2600-001-12345/);
 });
 test("searchExtractPdf extracts the newest matching PDF in one call without the model re-typing IDs", async () => {
 	const calls = { list: [], attach: [] };

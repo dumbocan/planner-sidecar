@@ -25,7 +25,10 @@ export function truncateTextOnly(value, maxChars = MAX_TEXT_CHARS) {
   return truncate(value, maxChars);
 }
 
-export function sanitizeText(value, { maxChars = MAX_TEXT_CHARS } = {}) {
+export function sanitizeText(
+  value,
+  { maxChars = MAX_TEXT_CHARS, maskPhones = true } = {},
+) {
   let text = String(value ?? "");
   text = text
     .replace(/<!--[\s\S]*?-->/g, " ")
@@ -41,10 +44,16 @@ export function sanitizeText(value, { maxChars = MAX_TEXT_CHARS } = {}) {
     .replace(/<[^>]+>/g, " ")
     .replace(/https?:\/\/[^\s<>'"]+/gi, "[URL]")
     .replace(/\b(?:www\.)[^\s<>'"]+/gi, "[URL]")
-    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[EMAIL]")
-    .replace(/(?<!\d)(?:\+?\d[\d .()/-]{7,}\d)(?!\d)/g, (m) =>
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[EMAIL]");
+  // Phone masking is right for untrusted email text, but wrong for trusted PDF
+  // extraction: any run of digits joined by space/dot/dash matches, so invoice
+  // numbers, hours, quantities and product codes (PK6, ALCOHOL 96) get
+  // destroyed. Callers that extract structured documents pass maskPhones:false.
+  if (maskPhones) {
+    text = text.replace(/(?<!\d)(?:\+?\d[\d .()/-]{7,}\d)(?!\d)/g, (m) =>
       /^\d{1,2}[\/.]\d{1,2}[\/.]\d{4}$/.test(m) ? m : "[PHONE]",
     );
+  }
   text = decodeEntities(text).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "");
   return truncate(text.replace(/\s+/g, " "), maxChars);
 }
