@@ -341,15 +341,18 @@ export class ImapIntake {
 			.sort((a, b) => b - a);
 
 		const candidates = [];
-		const scanLimit = sortedUids.length;
+		// sortedUids is newest-first, so only the newest envelopes can ever matter:
+		// never scan more than the caller's headroom times the batch budget. This
+		// used to `break` out of the loop when a mailbox held more messages than
+		// that budget, which returned an empty result for small limits and looked
+		// like "no matches" instead of "budget exhausted".
+		const scanLimit = Math.min(
+			sortedUids.length,
+			Math.max(remainingLimit, 1) * ENVELOPE_BATCH_MULTIPLIER,
+		);
 		const effectiveSeen = seenUids instanceof Set ? seenUids : new Set();
 		for (let index = 0; index < scanLimit; index += 1) {
 			if (candidates.length >= remainingLimit) break;
-			if (
-				candidates.length + (scanLimit - index) >
-				remainingLimit * ENVELOPE_BATCH_MULTIPLIER
-			)
-				break;
 			const uid = sortedUids[index];
 			if (effectiveSeen.has(uid)) continue;
 			const meta = await client.fetchOne(
@@ -374,6 +377,9 @@ export class ImapIntake {
 			effectiveSeen.add(uid);
 			candidates.push({
 				uid,
+				// Opaque Message-ID header: lets a caller link this message to its
+				// thread and to the row it later writes in its own archive index.
+				messageId: boundedString(envelope.messageId ?? "", 512),
 				internalDate: date,
 				from: effectiveRedact
 					? sanitizeExcerpt(sender, 256)
@@ -479,6 +485,9 @@ export class ImapIntake {
 				return {
 					folder: mailbox,
 					uid: numericUid,
+					// Opaque Message-ID header, so a caller can record which message an
+					// archived attachment came from and reach its thread.
+					messageId: boundedString(envelope?.messageId ?? "", 512),
 					date: envelope?.date instanceof Date ? envelope.date.toISOString() : null,
 					from: boundedString(envelope?.from?.[0]?.address ?? "", 256),
 					subject: boundedString(envelope?.subject ?? "", 256),
