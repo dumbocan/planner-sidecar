@@ -1,17 +1,16 @@
 {
   "wizard": {
     "securityAcknowledgedAt": "2026-07-20T17:57:48.631Z",
-    "lastRunAt": "2026-07-21T13:26:59.366Z",
-    "lastRunVersion": "2026.7.1",
-    "lastRunCommand": "onboard",
+    "lastRunAt": "2026-10-18T13:23:15.378Z",
+    "lastRunVersion": "2026.10.4",
+    "lastRunCommand": "doctor",
     "lastRunMode": "local"
   },
   "agents": {
     "defaults": {
       "workspace": "/home/node/.openclaw/workspace",
       "models": {
-        "openai/gpt-5.6-sol": {},
-        "openai/gpt-5.5": {
+        "openai/gpt-5.6-sol": {
           "alias": "Inteligente"
         },
         "deepseek/deepseek-v4-flash": {
@@ -24,18 +23,41 @@
           "alias": "StepFlash"
         },
         "stepfun/step-3.5-flash": {},
-        "stepfun/step-3.5-flash-2603": {}
+        "stepfun/step-3.5-flash-2603": {},
+        "openai/gpt-6.1-sol": {
+          "alias": "Sol"
+        },
+        "openai/gpt-6-sol": {},
+        "openai/gpt-6-luna": {
+          "alias": "Luna"
+        }
       },
       "model": {
         "primary": "stepfun/step-3.7-flash",
         "fallbacks": [
           "minimax/MiniMax-M2.7-highspeed",
-          "openai/gpt-5.5"
+          "openai/gpt-6.1-sol"
         ]
       },
       "sandbox": {
         "mode": "off"
+      },
+      "modelPolicy": {
+        "allow": [
+          "openai/gpt-6.1-sol",
+          "openai/gpt-6-sol",
+          "openai/gpt-6-luna",
+          "openai/gpt-5.6-sol",
+          "deepseek/deepseek-v4-flash",
+          "minimax/MiniMax-M2.7-highspeed",
+          "stepfun/step-3.7-flash",
+          "stepfun/step-3.5-flash",
+          "stepfun/step-3.5-flash-2603"
+        ]
       }
+    },
+    "entries": {
+      "main": {}
     }
   },
   "gateway": {
@@ -52,27 +74,27 @@
     "port": 18789,
     "bind": "lan",
     "tailscale": {
-      "mode": "off",
-      "resetOnExit": false
+      "mode": "off"
     },
     "controlUi": {
-      "allowInsecureAuth": false,
       "allowedOrigins": [
         "http://localhost:18789",
         "http://127.0.0.1:18789"
       ]
     },
     "nodes": {
-      "denyCommands": [
-        "camera.snap",
-        "camera.clip",
-        "screen.record",
-        "contacts.add",
-        "calendar.add",
-        "reminders.add",
-        "sms.send",
-        "sms.search"
-      ]
+      "commands": {
+        "deny": [
+          "camera.snap",
+          "camera.clip",
+          "screen.record",
+          "contacts.add",
+          "calendar.add",
+          "reminders.add",
+          "sms.send",
+          "sms.search"
+        ]
+      }
     }
   },
   "session": {
@@ -122,6 +144,14 @@
       "planner__planner_create_bucket",
       "planner__planner_update_bucket",
       "planner__planner_delete_bucket",
+      "m365-calendar__calendar_list_profiles",
+      "m365-calendar__calendar_status",
+      "m365-calendar__calendar_list_calendars",
+      "m365-calendar__calendar_list_events",
+      "m365-calendar__calendar_get_event",
+      "m365-calendar__calendar_create_event",
+      "m365-calendar__calendar_update_event",
+      "m365-calendar__calendar_delete_event",
       "isolated-engram__mem_save",
       "isolated-engram__mem_search",
       "exec",
@@ -162,30 +192,34 @@
     "profile": "full",
     "media": {
       "audio": {
-        "enabled": true,
-        "models": [
-          {
-            "type": "cli",
-            "command": "/home/node/.openclaw/local-tools/whisper-venv/bin/python",
-            "args": [
-              "/home/node/.openclaw/local-tools/transcribe.py",
-              "{{MediaPath}}"
-            ],
-            "timeoutSeconds": 120
-          }
-        ]
+        "enabled": true
       },
       "image": {
         "enabled": true,
-        "timeoutSeconds": 180,
-        "models": [
-          {
-            "provider": "minimax",
-            "model": "MiniMax-M3",
-            "timeoutSeconds": 300
-          }
-        ]
-      }
+        "timeoutSeconds": 180
+      },
+      "models": [
+        {
+          "provider": "minimax",
+          "model": "MiniMax-M3",
+          "timeoutSeconds": 300,
+          "capabilities": [
+            "image"
+          ]
+        },
+        {
+          "type": "cli",
+          "command": "/home/node/.openclaw/local-tools/whisper-venv/bin/python",
+          "args": [
+            "/home/node/.openclaw/local-tools/transcribe.py",
+            "{{MediaPath}}"
+          ],
+          "timeoutSeconds": 120,
+          "capabilities": [
+            "audio"
+          ]
+        }
+      ]
     }
   },
   "mcp": {
@@ -210,8 +244,6 @@
       "google-read": {
         "url": "http://google-read-sidecar:3000/mcp",
         "transport": "streamable-http",
-        "connectTimeout": 5,
-        "timeout": 30,
         "supportsParallelToolCalls": false,
         "toolFilter": {
           "include": [
@@ -234,13 +266,13 @@
             "main"
           ],
           "defaultToolsApprovalMode": "approve"
-        }
+        },
+        "connectionTimeoutMs": 5000,
+        "requestTimeoutMs": 30000
       },
       "laia-imap": {
         "url": "http://laia-imap-sidecar:3000/mcp",
         "transport": "streamable-http",
-        "connectTimeout": 5,
-        "timeout": 30,
         "supportsParallelToolCalls": false,
         "codex": {
           "agents": [
@@ -259,13 +291,13 @@
             "mail_list_attachments_in_folder",
             "mail_extract_pdf_in_folder"
           ]
-        }
+        },
+        "connectionTimeoutMs": 5000,
+        "requestTimeoutMs": 30000
       },
       "outlook-mail": {
         "url": "http://outlook-mail-sidecar:3000/mcp",
         "transport": "streamable-http",
-        "connectTimeout": 5,
-        "timeout": 30,
         "supportsParallelToolCalls": false,
         "toolFilter": {
           "include": [
@@ -283,13 +315,13 @@
             "main"
           ],
           "defaultToolsApprovalMode": "approve"
-        }
+        },
+        "connectionTimeoutMs": 5000,
+        "requestTimeoutMs": 30000
       },
       "pdf-tool": {
         "url": "http://pdf-tool:3000/mcp",
         "transport": "streamable-http",
-        "connectTimeout": 5,
-        "timeout": 120,
         "supportsParallelToolCalls": false,
         "toolFilter": {
           "include": [
@@ -303,13 +335,13 @@
             "main"
           ],
           "defaultToolsApprovalMode": "approve"
-        }
+        },
+        "connectionTimeoutMs": 5000,
+        "requestTimeoutMs": 120000
       },
       "planner": {
         "url": "http://planner-sidecar:3000/mcp",
         "transport": "streamable-http",
-        "connectTimeout": 5,
-        "timeout": 30,
         "supportsParallelToolCalls": false,
         "toolFilter": {
           "include": [
@@ -327,7 +359,28 @@
             "planner_update_bucket",
             "planner_delete_bucket"
           ]
-        }
+        },
+        "connectionTimeoutMs": 5000,
+        "requestTimeoutMs": 30000
+      },
+      "m365-calendar": {
+        "url": "http://m365-calendar-sidecar:3000/mcp",
+        "transport": "streamable-http",
+        "supportsParallelToolCalls": false,
+        "toolFilter": {
+          "include": [
+            "calendar_list_profiles",
+            "calendar_status",
+            "calendar_list_calendars",
+            "calendar_list_events",
+            "calendar_get_event",
+            "calendar_create_event",
+            "calendar_update_event",
+            "calendar_delete_event"
+          ]
+        },
+        "connectionTimeoutMs": 5000,
+        "requestTimeoutMs": 30000
       }
     }
   },
@@ -359,7 +412,14 @@
           "dreaming": {
             "enabled": true
           }
-        }
+        },
+        "enabled": true
+      },
+      "stepfun": {
+        "enabled": true
+      },
+      "minimax": {
+        "enabled": true
       }
     }
   },
@@ -420,9 +480,81 @@
         "enabled": false
       },
       "coding-agent": {
-        "enabled": true
+        "enabled": false
       },
       "camsnap": {
+        "enabled": false
+      },
+      "1password": {
+        "enabled": false
+      },
+      "blogwatcher": {
+        "enabled": false
+      },
+      "blucli": {
+        "enabled": false
+      },
+      "gemini": {
+        "enabled": false
+      },
+      "gh-issues": {
+        "enabled": false
+      },
+      "gifgrep": {
+        "enabled": false
+      },
+      "github": {
+        "enabled": false
+      },
+      "gog": {
+        "enabled": false
+      },
+      "goplaces": {
+        "enabled": false
+      },
+      "himalaya": {
+        "enabled": false
+      },
+      "mcporter": {
+        "enabled": false
+      },
+      "nano-pdf": {
+        "enabled": false
+      },
+      "obsidian": {
+        "enabled": false
+      },
+      "openai-whisper": {
+        "enabled": false
+      },
+      "openai-whisper-api": {
+        "enabled": false
+      },
+      "oracle": {
+        "enabled": false
+      },
+      "ordercli": {
+        "enabled": false
+      },
+      "session-logs": {
+        "enabled": false
+      },
+      "sherpa-onnx-tts": {
+        "enabled": false
+      },
+      "summarize": {
+        "enabled": false
+      },
+      "tmux": {
+        "enabled": false
+      },
+      "trello": {
+        "enabled": false
+      },
+      "video-frames": {
+        "enabled": false
+      },
+      "model-usage": {
         "enabled": false
       }
     }
@@ -437,8 +569,16 @@
     }
   },
   "meta": {
-    "lastTouchedVersion": "2026.7.1",
-    "lastTouchedAt": "2026-08-03T00:27:31.296Z"
+    "lastTouchedVersion": "2026.10.4",
+    "migrations": {
+      "modelPolicyAllowlist": true,
+      "utilityModelSeparation": true,
+      "webhookListeners": {
+        "telegram": [],
+        "feishu": [],
+        "nextcloud-talk": []
+      }
+    }
   },
   "channels": {
     "telegram": {
@@ -460,6 +600,14 @@
               "google-read__contacts_get",
               "google-read__contacts_create",
               "google-read__contacts_update",
+              "m365-calendar__calendar_list_profiles",
+              "m365-calendar__calendar_status",
+              "m365-calendar__calendar_list_calendars",
+              "m365-calendar__calendar_list_events",
+              "m365-calendar__calendar_get_event",
+              "m365-calendar__calendar_create_event",
+              "m365-calendar__calendar_update_event",
+              "m365-calendar__calendar_delete_event",
               "laia-imap__mail_list_digest_candidates",
               "laia-imap__mail_get_sanitized_excerpt",
               "laia-imap__mail_get_thread_metadata",
@@ -542,11 +690,6 @@
             },
             "contextWindow": 1000000,
             "maxTokens": 384000,
-            "compat": {
-              "supportsReasoningEffort": true,
-              "supportsUsageInStreaming": true,
-              "maxTokensField": "max_tokens"
-            },
             "api": "openai-completions"
           },
           {
@@ -564,11 +707,6 @@
             },
             "contextWindow": 1000000,
             "maxTokens": 384000,
-            "compat": {
-              "supportsReasoningEffort": true,
-              "supportsUsageInStreaming": true,
-              "maxTokensField": "max_tokens"
-            },
             "api": "openai-completions"
           },
           {
@@ -663,9 +801,13 @@
       }
     }
   },
-  "messages": {
-    "tts": {
-      "enabled": false
+  "messages": {},
+  "env": {
+    "vars": {
+      "OPENCLAW_HIDE_BANNER": "1"
     }
+  },
+  "tts": {
+    "auto": "off"
   }
 }
