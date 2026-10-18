@@ -98,6 +98,18 @@ function createMcpServer() {
   }, async (input) => {
     try { return result(await tools.extractPdfInFolder(input)); } catch (error) { return failure('mail_extract_pdf_in_folder', error); }
   });
+  server.registerTool('mail_save_attachment', {
+    description: 'Save one PDF attachment from a specific message to the shared workspace, under outDir. Requires confirm:true. Writes only inside the configured workspace root, sanitizes the filename, dedupes by sha256, and never modifies the mailbox. Returns the relative path and hash.',
+    inputSchema: z.object({
+      folder: z.string().min(1).max(256),
+      uid: z.number().int().min(1),
+      part: z.string().regex(/^\d+(\.\d+)*$/),
+      outDir: z.string().min(1).max(256),
+      confirm: z.literal(true),
+    }),
+  }, async (input) => {
+    try { return result(await tools.savePdfAttachment(input)); } catch (error) { return failure('mail_save_attachment', error); }
+  });
   return server;
 }
 

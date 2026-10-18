@@ -25,7 +25,7 @@ import {
 const composePath = new URL("../../../docker-compose2.yml", import.meta.url);
 const configPath = new URL("../../../state/openclaw.json", import.meta.url);
 
-test("exports only the approved bounded read-only mail tools", () => {
+test("exports only the approved bounded mail tools, with one confined write", () => {
 	assert.deepEqual(TOOL_NAMES, [
 		"mail_list_digest_candidates",
 		"mail_get_sanitized_excerpt",
@@ -35,6 +35,7 @@ test("exports only the approved bounded read-only mail tools", () => {
 		"mail_get_sanitized_in_folder",
 		"mail_list_attachments_in_folder",
 		"mail_extract_pdf_in_folder",
+		"mail_save_attachment",
 	]);
 	assert.equal(
 		TOOL_NAMES.some((name) =>
