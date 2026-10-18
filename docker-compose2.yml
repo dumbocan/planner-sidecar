@@ -100,6 +100,7 @@ services:
       - pdf-mcp-internal
       - planner-mcp-internal
       - outlook-mcp-internal
+      - calendar-mcp-internal
 
   openclaw-cli:
     <<: *openclaw-gentle-ai
@@ -161,7 +162,13 @@ services:
     init: true
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -192,7 +199,13 @@ services:
     init: true
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -223,7 +236,13 @@ services:
     init: true
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -231,6 +250,43 @@ services:
     networks:
       - planner-mcp-internal
       - planner-egress
+
+  m365-calendar-sidecar:
+    image: m365-calendar-sidecar:local
+    build:
+      context: ./services/m365-calendar-sidecar
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    volumes:
+      - "./calendar-state:/var/lib/m365-calendar"
+    environment:
+      PORT: "3000"
+      M365_CALENDAR_STATE_DIR: /var/lib/m365-calendar
+      M365_CALENDAR_TENANT: "${M365_CALENDAR_TENANT:-common}"
+      M365_CALENDAR_CLIENT_ID: "${M365_CALENDAR_CLIENT_ID:-}"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - calendar-mcp-internal
+      - calendar-egress
 
   outlook-mail-sidecar:
     image: outlook-mail-sidecar:local
@@ -254,7 +310,13 @@ services:
     init: true
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -301,14 +363,22 @@ services:
     volumes:
       - "${OPENCLAW_WORKSPACE_DIR:-${HOME:-/tmp}/.openclaw/workspace}:/home/node/.openclaw/workspace:rw"
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 10s
     networks:
-      - pdf-mcp-internal
-      - pdf-egress
+      pdf-mcp-internal:
+        aliases:
+          - pdf-tool-sidecar
+      pdf-egress: {}
 
 networks:
   default:
@@ -339,6 +409,15 @@ networks:
       com.docker.network.driver.mtu: "1400"
 
   planner-egress:
+    driver_opts:
+      com.docker.network.driver.mtu: "1400"
+
+  calendar-mcp-internal:
+    internal: true
+    driver_opts:
+      com.docker.network.driver.mtu: "1400"
+
+  calendar-egress:
     driver_opts:
       com.docker.network.driver.mtu: "1400"
 
