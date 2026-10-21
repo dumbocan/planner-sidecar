@@ -157,3 +157,53 @@ test("plannerSuccess logs a single structured audit line with no content leakage
     console.error = original;
   }
 });
+
+test('two concurrent MCP sessions stay usable at the same time', async () => {
+  const handle = await listen(0);
+  const endpoint = `http://127.0.0.1:${handle.port}/mcp`;
+  const headers = { 'content-type': 'application/json', accept: 'application/json, text/event-stream' };
+  const bodyOf = (text, contentType) => {
+    if (!String(contentType ?? '').includes('text/event-stream')) return JSON.parse(text);
+    const line = text.split('\n').filter((entry) => entry.startsWith('data:')).at(-1);
+    return line ? JSON.parse(line.slice(5).trim()) : null;
+  };
+  const openSession = async () => {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'probe', version: '1' } },
+      }),
+    });
+    await response.text();
+    assert.equal(response.status, 200);
+    return response.headers.get('mcp-session-id');
+  };
+  const listTools = async (sessionId) => {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { ...headers, 'mcp-session-id': sessionId },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }),
+    });
+    const parsed = bodyOf(await response.text(), response.headers.get('content-type'));
+    return { status: response.status, tools: (parsed?.result?.tools ?? []).map((tool) => tool.name) };
+  };
+  try {
+    // The gateway boots a read bundle and a write bundle against this endpoint,
+    // so the second initialize must not invalidate the first session.
+    const first = await openSession();
+    const second = await openSession();
+    assert.notEqual(first, second);
+    const afterBoth = await listTools(first);
+    assert.equal(afterBoth.status, 200);
+    assert.ok(afterBoth.tools.length > 0);
+    const secondTools = await listTools(second);
+    assert.equal(secondTools.status, 200);
+    assert.ok(secondTools.tools.length > 0);
+  } finally {
+    await handle.close();
+  }
+});

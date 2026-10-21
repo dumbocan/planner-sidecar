@@ -23,8 +23,6 @@ const GRAPH_ERROR_MESSAGES = {
   429: 'Rate limited by Microsoft Graph. Try again later.',
 };
 
-const sessions = new Map();
-
 function toolResult(value) {
   return { content: [{ type: 'text', text: JSON.stringify(value) }] };
 }
@@ -197,17 +195,9 @@ export function createMcpServer(runtime = createRuntime()) {
 }
 
 export function createApp(runtime = createRuntime()) {
-  const toolRegistry = createMcpServer(runtime);
-  let currentTransport = null;
-
-  async function connectTransport(transport) {
-    if (currentTransport) {
-      try { await toolRegistry.close(); } catch {}
-      currentTransport = null;
-    }
-    currentTransport = transport;
-    await toolRegistry.connect(transport);
-  }
+  // Sessions are keyed per app instance: the gateway opens a read server and a
+  // write server against this same endpoint, so they must not share state.
+  const sessions = new Map();
 
   return createServer(async (request, response) => {
     if (request.method === 'GET' && request.url === '/healthz') {
@@ -244,7 +234,11 @@ export function createApp(runtime = createRuntime()) {
         transport.onclose = () => {
           if (transport.sessionId) sessions.delete(transport.sessionId);
         };
-        await connectTransport(transport);
+        // One McpServer per session. A single shared registry had to close the
+        // previous connection on every new initialize, which dropped the peer
+        // session as soon as a second MCP server booted against this endpoint.
+        const sessionServer = createMcpServer(runtime);
+        await sessionServer.connect(transport);
         return transport.handleRequest(request, response, body);
       }
 
