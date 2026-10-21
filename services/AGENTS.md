@@ -54,6 +54,12 @@ silent failure. Follow the rule; do not "simplify" around it.
 - **Never change OAuth scopes casually.** Per-slot scope intent lives in each
   sidecar README; a slot documented as read-only must not gain a read-write
   scope.
+- **Never wire an interactive OAuth helper to `listener.once('request')`.**
+  Something on this host probes freshly opened loopback ports with `GET /`, and
+  a browser also asks for `/favicon.ico`. With `once`, either one is taken as
+  the OAuth callback and aborts the flow with a state mismatch — that is exactly
+  how two re-authorization attempts died. Handle only `/oauth2/callback`, answer
+  404 for every other path, and keep `state` validation on the real callback.
 - **Never ship a Dockerfile that needs a lockfile the repo does not have.** The
   planner image could not be rebuilt for this exact reason; the build fails with
   `"/pnpm-lock.yaml": not found` and `docker compose up` then silently keeps the
@@ -113,6 +119,17 @@ Keep it: it fails with the old shared-registry code (`HTTP 404`, empty body).
   separate "sidecar broken" from "gateway wiring broken".
 - Intermittent tool availability across two bundles pointing at one URL is the
   single-session defect, not a race in the gateway.
+
+## Environment constraints
+
+- The tailnet on this host allows only port 22, so tailnet-routed HTTP ports are
+  unreachable from the Windows workstation. To reach a loopback-only service
+  from there, use an SSH local forward and pass
+  `-o ExitOnForwardFailure=yes` so a dropped forward fails loudly instead of
+  opening an apparently healthy session.
+- Clipboard from Linux never reaches Windows on its own: TUIs copy through
+  OSC 52 or the X11 clipboard. Select with Shift held, or serve the text over
+  HTTP and copy it in the Windows browser.
 
 ## Adding a new sidecar
 
