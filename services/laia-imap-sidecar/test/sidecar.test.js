@@ -33,6 +33,7 @@ test("exports only the approved bounded mail tools, with one confined write", ()
 		"mail_list_mailboxes",
 		"mail_search_in_mailbox",
 		"mail_get_sanitized_in_folder",
+		"mail_get_links",
 		"mail_list_attachments_in_folder",
 		"mail_extract_pdf_in_folder",
 		"mail_save_attachment",
@@ -198,6 +199,20 @@ test("defaults the bootstrap window to 30 days and rejects unbounded configurati
 	for (const value of ["0", "-1", "1.5", "366", "nope", " 30 "]) {
 		assert.throws(() => readBootstrapDays(value), /IMAP_BOOTSTRAP_DAYS/);
 	}
+});
+
+test("sync selects only selectable Inbox and Sent mailboxes", () => {
+	assert.deepEqual(
+		selectSyncMailboxes([
+			{ path: "INBOX", name: "Inbox" },
+			{ path: "Sent", name: "Sent", flags: new Set(["\\Noselect"]) },
+			{ path: "INBOX.Sent", name: "Sent", specialUse: "\\Sent" },
+		]),
+		[
+			{ path: "INBOX", name: "Inbox" },
+			{ path: "INBOX.Sent", name: "Sent", specialUse: "\\Sent" },
+		],
+	);
 });
 
 test("selects Inbox and the discovered Sent mailbox without relying on message content", () => {
@@ -1022,6 +1037,39 @@ test("searchMailbox applies the sender filter at envelope level and not via IMAP
 	}
 });
 
+test("searchMailbox resolves the Sent name to the selectable Sent path with a read-only lock", async () => {
+	const calls = [];
+	class MockImapFlow {
+		async connect() {}
+		async logout() {}
+		async list() {
+			return [
+				{ path: "INBOX", name: "Inbox" },
+				{ path: "Sent", name: "Sent", flags: new Set(["\\Noselect"]) },
+				{ path: "INBOX.Sent", name: "Sent", specialUse: "\\Sent" },
+			];
+		}
+		async getMailboxLock(mailbox, options) {
+			calls.push(["lock", mailbox, options]);
+			return { release() {} };
+		}
+		async search() {
+			return [];
+		}
+	}
+	const intake = new ImapIntake({
+		state: {},
+		ImapFlowImpl: MockImapFlow,
+		loadCredentials: async () => ({ user: "test", pass: "test" }),
+	});
+	await intake.searchMailbox({
+		mailbox: "Sent",
+		fromDate: "2026-07-01",
+		toDate: "2026-07-21",
+	});
+	assert.deepEqual(calls, [["lock", "INBOX.Sent", { readOnly: true, acquireTimeout: 10_000 }]]);
+});
+
 test("searchMailbox rejects mailbox paths that are not in the fresh server list", async () => {
 	let locked = false;
 	const client = {
@@ -1083,6 +1131,7 @@ test("searchMailbox redacts sender and subject by default and exposes them when 
 		limit: 20,
 	});
 	assert.match(redacted[0].from, /\[redacted-email\]/);
+	assert.equal(redacted[0].fromDomain, "example.test");
 	assert.match(redacted[0].subject, /\[redacted-email\]/);
 	const raw = await intake.collectMailboxCandidates(client, {
 		mailbox: "INBOX",
@@ -1092,6 +1141,7 @@ test("searchMailbox redacts sender and subject by default and exposes them when 
 		limit: 20,
 	});
 	assert.equal(raw[0].from, "boss@example.test");
+	assert.equal(raw[0].fromDomain, "example.test");
 	assert.equal(raw[0].subject, "Confidential invoice from boss@example.test");
 });
 
@@ -2051,8 +2101,8 @@ function mockFetchBodyClient(handlers = {}) {
 		async list() {
 			return handlers.list?.() ?? [{ path: "INBOX", name: "Inbox" }];
 		}
-		async getMailboxLock() {
-			return handlers.getMailboxLock?.() ?? { release() {} };
+		async getMailboxLock(mailbox, options) {
+			return handlers.getMailboxLock?.(mailbox, options) ?? { release() {} };
 		}
 		async fetchOne(...args) {
 			return handlers.fetchOne?.(...args) ?? null;
@@ -2117,6 +2167,39 @@ test("fetchBodyInFolder returns sanitized body text and metadata for a valid fol
 		redact: false,
 	});
 	assert.equal(raw.from, "facturas@vitifrigo.test");
+});
+
+test("fetchLinksInFolder returns unique HTTP links without query or fragment from Sent", async () => {
+	const calls = [];
+	const intake = mockFetchBodyClient({
+		list: () => [{ path: "INBOX.Sent", name: "Sent", specialUse: "\\Sent" }],
+		getMailboxLock(mailbox, options) {
+			calls.push(["lock", mailbox, options]);
+			return { release() { calls.push(["release"]); } };
+		},
+		fetchOne(uid, query) {
+			assert.equal(uid, "42");
+			assert.deepEqual(query, {
+				source: { start: 0, maxLength: 64 * 1024 },
+			});
+			return {
+				source: Buffer.from(
+					"\r\n\r\n" +
+						"Invoice https://agent:secret@billing.example.test/invoice/7?token=secret#summary\n" +
+						"Repeat https://billing.example.test/invoice/7?other=value\n" +
+						"Ignore javascript:alert(1)",
+				),
+			};
+		},
+	});
+	const result = await intake.fetchLinksInFolder({ mailbox: "Sent", uid: 42 });
+	assert.deepEqual(result, {
+		mailbox: "INBOX.Sent",
+		uid: 42,
+		links: ["https://billing.example.test/invoice/7"],
+	});
+	assert.deepEqual(calls[0], ["lock", "INBOX.Sent", { readOnly: true, acquireTimeout: 10_000 }]);
+	assert.deepEqual(calls.at(-1), ["release"]);
 });
 
 test("fetchBodyInFolder acquires a read-only lock and releases it on the happy path", async () => {
@@ -2208,6 +2291,31 @@ test("fetchBodyInFolder handles missing source gracefully (no body available)", 
 	});
 	const result = await intake.fetchBodyInFolder({ folder: "INBOX", uid: 1 });
 	assert.equal(result.excerpt, "");
+});
+
+test("getLinksInFolder facade validates mailbox and delegates to intake", async () => {
+	let called = false;
+	const tools = createMailTools({
+		state: {},
+		intake: {
+			async fetchLinksInFolder(input) {
+				called = true;
+				assert.deepEqual(input, { mailbox: "INBOX.Sent", uid: 42 });
+				return { mailbox: input.mailbox, uid: input.uid, links: [] };
+			},
+		},
+	});
+	const result = await tools.getLinksInFolder({ mailbox: "INBOX.Sent", uid: 42 });
+	assert.equal(called, true);
+	assert.deepEqual(result, { mailbox: "INBOX.Sent", uid: 42, links: [] });
+	await assert.rejects(
+		tools.getLinksInFolder({ mailbox: "INBOX*", uid: 42 }),
+		/forbidden/,
+	);
+	await assert.rejects(
+		tools.getLinksInFolder({ mailbox: "INBOX", uid: 0 }),
+		/positive integer/,
+	);
 });
 
 test("getSanitizedInFolder facade validates folder path and delegates to intake", async () => {

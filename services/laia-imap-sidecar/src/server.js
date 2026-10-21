@@ -76,6 +76,15 @@ function createMcpServer() {
   }, async (input) => {
     try { return result(await tools.getSanitizedInFolder(input)); } catch (error) { return failure('mail_get_sanitized_in_folder', error); }
   });
+  server.registerTool('mail_get_links', {
+    description: 'Read up to 20 HTTP(S) links from one message in a selectable mailbox by UID. Opens a read-only IMAP lock; returns only scheme, host, and path, stripping query parameters and fragments. Requires mailbox (from mail_list_mailboxes) and uid (from mail_search_in_mailbox).',
+    inputSchema: z.object({
+      mailbox: z.string().min(1).max(256),
+      uid: z.number().int().min(1),
+    }),
+  }, async (input) => {
+    try { return result(await tools.getLinksInFolder(input)); } catch (error) { return failure('mail_get_links', error); }
+  });
   server.registerTool('mail_list_attachments_in_folder', {
     description: 'List safe attachment metadata for one message by folder and UID: MIME part number, type, filename, size, disposition, and whether it is a PDF candidate. Walks the IMAP BODYSTRUCTURE; no attachment bytes leave the server. Requires folder (from mail_list_mailboxes) and uid (from mail_search_in_mailbox). Use this to discover PDF invoices before calling mail_extract_pdf_in_folder.',
     inputSchema: z.object({

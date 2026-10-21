@@ -9,6 +9,7 @@ export const TOOL_NAMES = [
 	"mail_list_mailboxes",
 	"mail_search_in_mailbox",
 	"mail_get_sanitized_in_folder",
+	"mail_get_links",
 	"mail_list_attachments_in_folder",
 	"mail_extract_pdf_in_folder",
 	"mail_save_attachment",
@@ -359,6 +360,18 @@ export function createMailTools({
 				uid,
 				redact: input.redact !== false,
 			});
+		},
+
+		async getLinksInFolder(input = {}) {
+			if (!intake || typeof intake.fetchLinksInFolder !== "function") {
+				throw new Error("IMAP intake is not configured");
+			}
+			const mailbox = validateMailboxPath(input.mailbox);
+			const uid = Number(input.uid);
+			if (!Number.isSafeInteger(uid) || uid < 1) {
+				throw new Error("uid must be a positive integer");
+			}
+			return intake.fetchLinksInFolder({ mailbox, uid });
 		},
 
 		async listAttachmentsInFolder(input = {}) {
