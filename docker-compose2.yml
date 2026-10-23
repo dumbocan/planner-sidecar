@@ -49,6 +49,9 @@ services:
       - "${OPENCLAW_AUTH_PROFILE_SECRET_DIR:-${HOME:-/tmp}/.openclaw-auth-profile-secrets}:/home/node/.config/openclaw"
       - "./engram/bin/engram:/usr/local/bin/engram:ro"
       - "./engram/data:/home/node/.engram"
+      # Read-only view of the sidecar invoice archive, so the agent can verify
+      # the stranded download copies itself instead of asking a human to check.
+      - "./outlook-state/mercadona:/home/node/.openclaw/outlook-archive:ro"
       ## Uncomment the lines below to enable sandbox isolation
       ## (agents.defaults.sandbox). Requires Docker CLI in the image
       ## (build with --build-arg OPENCLAW_INSTALL_DOCKER_CLI=1) or use
@@ -189,8 +192,12 @@ services:
     volumes:
       - "./imap-secrets:/run/secrets/imap-read-only:ro"
       - "./imap-state:/var/lib/laia-imap"
+      # mail_save_attachment writes here. Scoped to the invoice archive so the
+      # sidecar cannot write anywhere else in the workspace.
+      - "./workspace/comercios:/home/node/.openclaw/workspace/comercios"
     environment:
       IMAP_BOOTSTRAP_DAYS: "${IMAP_BOOTSTRAP_DAYS:-30}"
+      IMAP_WORKSPACE_ROOT: /home/node/.openclaw/workspace
       PDF_TOOL_URL: "http://pdf-tool:3000/mcp"
     cap_drop:
       - ALL

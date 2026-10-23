@@ -8,6 +8,8 @@ dist
 dist-runtime/
 dist-sea/
 pnpm-lock.yaml
+# The planner sidecar image installs with pnpm --frozen-lockfile.
+!services/planner-sidecar/pnpm-lock.yaml
 bun.lock
 bun.lockb
 coverage

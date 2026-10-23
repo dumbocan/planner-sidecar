@@ -50,9 +50,10 @@ Credentials live only at `/run/secrets/imap-read-only/{username,password}` (mode
 | `mail_get_sanitized_excerpt` | One excerpt, `defaultChars=1200`, max `2000` | raw MIME never returned |
 | `mail_get_thread_metadata` | Thread metadata (no body), `defaultLimit=10`, max `20` | raw mail never returned |
 | `mail_list_mailboxes` | `{path, name}` strings only, capped at `200` | excludes `\Noselect`/`\NonExistent`; no counts, no status |
-| `mail_search_in_mailbox` | Envelope-only fetch for one selectable folder | date-only IMAP search; redacted by default; max `20` results |
+| `mail_search_in_mailbox` | Envelope-only fetch for one selectable folder | `from` remains redacted by default; `fromDomain` exposes only the sender's domain; max `20` results |
+| `mail_get_links` | Up to `20` HTTP(S) links from one message by mailbox and UID | query parameters and fragments are stripped; raw message content is never returned |
 
-Redaction is the default. The agent must not pass `redact: false` unless the caller explicitly asked for raw sender/subject.
+Redaction is the default. The agent must not pass `redact: false` unless the caller explicitly asked for raw sender/subject. Link results omit query parameters and fragments because those may contain access tokens or private identifiers.
 
 ## Data Behavior and Folder Coverage
 
@@ -68,7 +69,8 @@ Two distinct intake paths share the same transport.
 ### One-shot arbitrary-folder search (live read)
 
 - `mail_list_mailboxes` reopens a fresh IMAP `LIST`, filters selectable mailboxes, and never returns counts, status, or message content.
-- `mail_search_in_mailbox` re-opens the fresh list to validate the mailbox path, opens a read-only `getMailboxLock`, runs an envelope-only IMAP `SINCE`/`BEFORE` search (date strings, never `TEXT`/`BODY`), fetches only `{envelope, internalDate}`, applies `senderFilter`/`subjectFilter` after the fetch, caps at `20` results, and always releases the lock in `finally`.
+- `mail_search_in_mailbox` re-opens the fresh list to validate the mailbox path, opens a read-only `getMailboxLock`, runs an envelope-only IMAP `SINCE`/`BEFORE` search (date strings, never `TEXT`/`BODY`), fetches only `{envelope, internalDate}`, applies `senderFilter`/`subjectFilter` after the fetch, returns a redacted `from` plus `fromDomain`, caps at `20` results, and always releases the lock in `finally`.
+- `mail_get_links` re-opens the fresh list, resolves a unique `Sent` alias when needed, opens a read-only lock, fetches a bounded message source, and returns up to `20` unique HTTP(S) URLs with query parameters and fragments removed. It never returns message text or raw MIME.
 - Limits: `mailbox` ≤ 256 chars, no wildcards/control bytes; `fromDate`/`toDate` strictly `YYYY-MM-DD`; range ≤ 366 days; `senderFilter`/`subjectFilter` ≤ 256 chars, no control bytes; `limit` 1..20, default 20.
 - **It is a one-shot bounded search, never a background full-folder ingestion, and never replaces Inbox/Sent.**
 
@@ -76,7 +78,7 @@ Two distinct intake paths share the same transport.
 
 - The spam folder is the selectable path `INBOX.Junk`. Do not assume a literal `Unwanted` / `No Deseado` folder.
 - Hostinger uses flat `INBOX.<Folder>` naming (e.g. `INBOX.Sent`, `INBOX.Drafts`, `INBOX.Junk`, `INBOX.Trash`).
-- Always call `mail_list_mailboxes` first; use the returned `path` value verbatim in `mail_search_in_mailbox`. Do not pass wildcards, ambiguous names, or values not present in the fresh list.
+- Always call `mail_list_mailboxes` first; use the returned `path` value verbatim in `mail_search_in_mailbox`. If the literal `Sent` is not itself selectable, the sidecar resolves it only when exactly one selectable Sent mailbox is identified by IMAP special-use or its known folder name; use the listed path whenever multiple matches exist. Do not pass wildcards or other unlisted names.
 
 ## Local Development
 

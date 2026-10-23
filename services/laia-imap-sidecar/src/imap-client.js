@@ -20,6 +20,16 @@ function boundedString(value, maximum) {
 	return String(value ?? "").slice(0, maximum);
 }
 
+function senderDomain(address) {
+	const value = String(address ?? "");
+	const separator = value.lastIndexOf("@");
+	if (separator < 1) return null;
+	const domain = value.slice(separator + 1).toLowerCase();
+	return /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/.test(domain)
+		? domain
+		: null;
+}
+
 const SECRET_DIR = "/run/secrets/imap-read-only";
 const MAX_LITERAL_BYTES = 64 * 1024;
 const LOCK_TIMEOUT_MS = 10_000;
@@ -126,15 +136,43 @@ function isoDayString(date) {
 
 export function selectSyncMailboxes(mailboxes) {
 	if (!Array.isArray(mailboxes)) throw new Error("IMAP mailbox list is invalid");
+	const selectablePaths = new Set(selectSelectablePaths(mailboxes));
 	return mailboxes.filter((mailbox) => {
-		if (mailbox?.path === "INBOX" || mailbox?.specialUse === "\\Sent")
+		if (!selectablePaths.has(mailbox?.path)) return false;
+		if (mailbox.path === "INBOX" || mailbox.specialUse === "\\Sent")
 			return true;
 		return SENT_MAILBOX_NAMES.has(
-			String(mailbox?.name ?? "")
+			String(mailbox.name ?? "")
 				.trim()
 				.toLowerCase(),
 		);
 	});
+}
+
+function resolveSelectableMailboxPath(requested, mailboxes) {
+	const selectablePaths = new Set(selectSelectablePaths(mailboxes));
+	if (selectablePaths.has(requested)) return requested;
+	if (requested.toLowerCase() !== "sent") return requested;
+
+	const selectable = mailboxes.filter((mailbox) =>
+		selectablePaths.has(mailbox?.path),
+	);
+	const specialUseSent = selectable.filter(
+		(mailbox) => mailbox.specialUse === "\\Sent",
+	);
+	if (specialUseSent.length === 1) return specialUseSent[0].path;
+	if (specialUseSent.length > 1) {
+		throw new Error("Sent mailbox is ambiguous; use its listed path");
+	}
+
+	const namedSent = selectable.filter((mailbox) =>
+		SENT_MAILBOX_NAMES.has(String(mailbox.name ?? "").trim().toLowerCase()),
+	);
+	if (namedSent.length === 1) return namedSent[0].path;
+	if (namedSent.length > 1) {
+		throw new Error("Sent mailbox is ambiguous; use its listed path");
+	}
+	return requested;
 }
 
 export async function readFileCredentials(secretDir = SECRET_DIR) {
@@ -176,6 +214,26 @@ function parseBoundedLiteral(source) {
 		headers[name] = Object.hasOwn(headers, name) ? null : match[2];
 	}
 	return { headers, body: bounded.replace(/^[\s\S]*?\r?\n\r?\n/, "") };
+}
+
+function extractSanitizedLinks(body) {
+	const links = new Set();
+	for (const match of String(body ?? "").matchAll(/https?:\/\/[^\s<>"']+/gi)) {
+		const candidate = match[0].replace(/[),.;!?]+$/g, "");
+		try {
+			const url = new URL(candidate);
+			if (url.protocol !== "http:" && url.protocol !== "https:") continue;
+			url.username = "";
+			url.password = "";
+			url.search = "";
+			url.hash = "";
+			links.add(url.toString());
+			if (links.size >= 20) break;
+		} catch {
+			// Malformed links are omitted rather than returned as untrusted strings.
+		}
+	}
+	return [...links];
 }
 
 export class ImapIntake {
@@ -270,13 +328,14 @@ export class ImapIntake {
 		return this.withReadOnlyClient(async (client) => {
 			const fresh = await client.list();
 			const allowed = new Set(selectSelectablePaths(fresh, MAX_MAILBOX_LIST));
-			if (!allowed.has(mailbox)) {
+			const mailboxPath = resolveSelectableMailboxPath(mailbox, fresh);
+			if (!allowed.has(mailboxPath)) {
 				throw new Error("mailbox path is not selectable on the current server");
 			}
 
 			let lock;
 			try {
-				lock = await client.getMailboxLock(mailbox, {
+				lock = await client.getMailboxLock(mailboxPath, {
 					readOnly: true,
 					acquireTimeout: LOCK_TIMEOUT_MS,
 				});
@@ -341,15 +400,18 @@ export class ImapIntake {
 			.sort((a, b) => b - a);
 
 		const candidates = [];
-		const scanLimit = sortedUids.length;
+		// sortedUids is newest-first, so only the newest envelopes can ever matter:
+		// never scan more than the caller's headroom times the batch budget. This
+		// used to `break` out of the loop when a mailbox held more messages than
+		// that budget, which returned an empty result for small limits and looked
+		// like "no matches" instead of "budget exhausted".
+		const scanLimit = Math.min(
+			sortedUids.length,
+			Math.max(remainingLimit, 1) * ENVELOPE_BATCH_MULTIPLIER,
+		);
 		const effectiveSeen = seenUids instanceof Set ? seenUids : new Set();
 		for (let index = 0; index < scanLimit; index += 1) {
 			if (candidates.length >= remainingLimit) break;
-			if (
-				candidates.length + (scanLimit - index) >
-				remainingLimit * ENVELOPE_BATCH_MULTIPLIER
-			)
-				break;
 			const uid = sortedUids[index];
 			if (effectiveSeen.has(uid)) continue;
 			const meta = await client.fetchOne(
@@ -372,12 +434,31 @@ export class ImapIntake {
 						? meta.internalDate.toISOString()
 						: null;
 			effectiveSeen.add(uid);
+			// Envelope recipients: needed to know who a sent message went to, so a
+			// reply can be tied back to the conversation it belongs to.
+			const recipients = Array.isArray(envelope.to)
+				? envelope.to
+						.map((entry) => entry?.address ?? "")
+						.filter(Boolean)
+						.join(", ")
+				: "";
 			candidates.push({
 				uid,
+				// Opaque Message-ID header: lets a caller link this message to its
+				// thread and to the row it later writes in its own archive index.
+				messageId: boundedString(envelope.messageId ?? "", 512),
+				// In-Reply-To points at the parent message, which is the exact thread
+				// link. Grouping by subject alone splits conversations whenever a
+				// reply lands in a different folder.
+				inReplyTo: boundedString(envelope.inReplyTo ?? "", 512),
 				internalDate: date,
 				from: effectiveRedact
 					? sanitizeExcerpt(sender, 256)
 					: boundedString(sender, 256),
+				fromDomain: senderDomain(sender),
+				to: effectiveRedact
+					? sanitizeExcerpt(recipients, 512)
+					: boundedString(recipients, 512),
 				subject: effectiveRedact
 					? sanitizeExcerpt(subject, 256)
 					: boundedString(subject, 256),
@@ -479,6 +560,9 @@ export class ImapIntake {
 				return {
 					folder: mailbox,
 					uid: numericUid,
+					// Opaque Message-ID header, so a caller can record which message an
+					// archived attachment came from and reach its thread.
+					messageId: boundedString(envelope?.messageId ?? "", 512),
 					date: envelope?.date instanceof Date ? envelope.date.toISOString() : null,
 					from: boundedString(envelope?.from?.[0]?.address ?? "", 256),
 					subject: boundedString(envelope?.subject ?? "", 256),
@@ -564,13 +648,14 @@ export class ImapIntake {
 		return this.withReadOnlyClient(async (client) => {
 			const fresh = await client.list();
 			const allowed = new Set(selectSelectablePaths(fresh, MAX_MAILBOX_LIST));
-			if (!allowed.has(mailbox)) {
+			const mailboxPath = resolveSelectableMailboxPath(mailbox, fresh);
+			if (!allowed.has(mailboxPath)) {
 				throw new Error("mailbox path is not selectable on the current server");
 			}
 
 			let lock;
 			try {
-				lock = await client.getMailboxLock(mailbox, {
+				lock = await client.getMailboxLock(mailboxPath, {
 					readOnly: true,
 					acquireTimeout: LOCK_TIMEOUT_MS,
 				});
@@ -611,6 +696,45 @@ export class ImapIntake {
 					from,
 					subject,
 					excerpt,
+				};
+			} finally {
+				lock?.release();
+			}
+		});
+	}
+
+	async fetchLinksInFolder({ mailbox, uid }) {
+		const requestedMailbox = validateMailboxPath(mailbox);
+		const numericUid = Number(uid);
+		if (!Number.isSafeInteger(numericUid) || numericUid < 1) {
+			throw new Error("uid must be a positive integer");
+		}
+
+		return this.withReadOnlyClient(async (client) => {
+			const fresh = await client.list();
+			const allowed = new Set(selectSelectablePaths(fresh, MAX_MAILBOX_LIST));
+			const mailboxPath = resolveSelectableMailboxPath(requestedMailbox, fresh);
+			if (!allowed.has(mailboxPath)) {
+				throw new Error("mailbox path is not selectable on the current server");
+			}
+
+			let lock;
+			try {
+				lock = await client.getMailboxLock(mailboxPath, {
+					readOnly: true,
+					acquireTimeout: LOCK_TIMEOUT_MS,
+				});
+				const fetched = await client.fetchOne(
+					String(numericUid),
+					{ source: { start: 0, maxLength: MAX_LITERAL_BYTES } },
+					{ uid: true },
+				);
+				if (!fetched?.source) throw new Error("message not found in mailbox");
+				const parsed = parseBoundedLiteral(fetched.source);
+				return {
+					mailbox: mailboxPath,
+					uid: numericUid,
+					links: extractSanitizedLinks(parsed.body),
 				};
 			} finally {
 				lock?.release();

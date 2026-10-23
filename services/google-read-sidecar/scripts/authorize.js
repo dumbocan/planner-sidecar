@@ -51,9 +51,17 @@ console.log('Open this URL in a browser on this Docker host, then approve only t
 console.log(authorizeUrl.toString());
 
 const code = await new Promise((resolve, reject) => {
-  listener.once('request', (request, response) => {
+  // Local port scanners and browsers probe loopback sockets on their own, and any
+  // of those requests used to abort an interactive authorization. Only the OAuth
+  // callback path may end this flow; everything else is ignored.
+  listener.on('request', function onRequest(request, response) {
     const callback = new URL(request.url, redirectUri);
-    if (callback.pathname !== '/oauth2/callback' || callback.searchParams.get('state') !== state) {
+    if (callback.pathname !== '/oauth2/callback') {
+      response.writeHead(404).end();
+      return;
+    }
+    listener.off('request', onRequest);
+    if (callback.searchParams.get('state') !== state) {
       response.writeHead(400).end('Authorization failed. Return to the terminal.');
       reject(new Error('OAuth callback state validation failed'));
       return;
